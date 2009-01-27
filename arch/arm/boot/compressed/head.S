@@ -816,6 +816,7 @@ proc_types:
  THUMB(		nop				)
 		mov	pc, lr
  THUMB(		nop				)
+#endif
 
 		.word	0x41007000		@ ARM7/710
 		.word	0xfff8fe00
