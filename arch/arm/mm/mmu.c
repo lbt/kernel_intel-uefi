@@ -685,7 +685,11 @@ static void __init alloc_init_pmd(pud_t *pud, unsigned long addr,
 		if (type->prot_sect &&
 				((addr | next | phys) & ~SECTION_MASK) == 0 &&
 				!force_pages) {
+<<<<<<< HEAD
 			__map_init_section(pmd, addr, next, phys, type);
+=======
+			map_init_section(pmd, addr, next, phys, type);
+>>>>>>> ARM: allow the kernel text section to be made read-only
 		} else {
 			alloc_init_pte(pmd, addr, next,
 						__phys_to_pfn(phys), type);
