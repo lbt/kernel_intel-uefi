@@ -321,6 +321,20 @@ static int acpi_button_resume(struct device *dev)
 
 	if (button->type == ACPI_BUTTON_TYPE_LID)
 		return acpi_lid_send_state(device);
+#ifdef CONFIG_ACPI_BUTTON_RESUME_HACK
+	else {
+		struct input_dev *input = button->input;
+		int keycode = test_bit(KEY_SLEEP, input->keybit) ?
+					KEY_SLEEP : KEY_POWER;
+
+		input_report_key(input, keycode, 1);
+		input_sync(input);
+		input_report_key(input, keycode, 0);
+		input_sync(input);
+
+		pm_wakeup_event(&device->dev, 0);
+	}
+#endif
 	return 0;
 }
 #endif

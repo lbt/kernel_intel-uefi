@@ -394,6 +394,16 @@ config ACPI_BGRT
 	  data from the firmware boot splash. It will appear under
 	  /sys/firmware/acpi/bgrt/ .
 
+config ACPI_BUTTON_RESUME_HACK
+	bool "Always generate power button event on resume"
+	depends on ACPI_BUTTON
+	default n
+	help
+	  This is a hack to generate a power button event when the device
+	  resumes from suspend state. We currently need it on the Samsung
+	  XE700T which does not report the button event in the event status
+	  register.
+
 source "drivers/acpi/apei/Kconfig"
 
 endif	# ACPI
