@@ -1,0 +1,90 @@
+# defconfig override file for production (i.e. end user) kernels
+# All results tested with 3.0.18-mid3
+
+# All measurements are from kernel timestamp when SurfaceFlinger reports that
+# boot is complete.
+
+# Baseline 1: No options disabled:
+# count: 30 min: 26.381113 max: 29.096764 avg: 27.3422656 var: 0.370179931806
+
+# Baseline 2: CONFIG_SLUB_DEBUG_ON, CONFIG_DEBUG_LOCKDEP, CONFIG_PROVE_LOCKING,
+# CONFIG_KEXEC, CONFIG_LOGO disabled:
+# count: 30 min: 19.173729 max: 20.899128 avg: 19.8613163 var: 0.188042845893
+
+# Baseline 3: All options mentioned in this file disabled. If we have correctly
+# identified the performance-degrading options, should be statistically similar
+# to Baseline 2:
+# count: 22 min: 19.529188 max: 21.457788 avg: 20.0931211364 var: 0.184577989163
+
+##############################################################################
+# Performance-degrading options:                                             #
+##############################################################################
+
+# count: 30 min: 22.813723 max: 24.640595 avg: 23.6227794 var: 0.257157487277
+CONFIG_SLUB_DEBUG_ON=n
+
+# count: 28 min: 25.05063 max: 27.518517 avg: 26.3056822857 var: 0.311827943755
+CONFIG_DEBUG_LOCKDEP=n
+
+# count: 30 min: 21.876828 max: 23.38384 avg: 22.4831335333 var: 0.125103155904
+CONFIG_PROVE_LOCKING=n
+
+##############################################################################
+# Options we don't want for other reasons                                    #
+##############################################################################
+
+# Security attack vector
+CONFIG_KEXEC=n
+
+# Only used during development
+CONFIG_ANDROID_RAM_CONSOLE=n
+
+# Production builds don't want penguins
+CONFIG_LOGO=n
+
+##############################################################################
+# Other options that were tested, but did not significantly affect results   #
+##############################################################################
+
+# Note that there is considerable variance in test results, due to a great deal
+# of thread contention and MMC activity at the experimental interval end point.
+# Some options which may have slight improvements are lost in the noise.
+
+# count: 25 min: 26.144541 max: 29.048697 avg: 27.51017288 var: 0.306112643974
+# CONFIG_DEBUG_SPINLOCK_SLEEP=n
+
+# count: 15 min: 27.112304 max: 29.497549 avg: 28.4660996667 var: 0.41084231672
+# CONFIG_DEBUG_STACK_USAGE=n
+
+# count: 30 min: 26.625059 max: 28.985927 avg: 27.7047432333 var: 0.315007714913
+# CONFIG_EARLY_PRINTK=n
+# CONFIG_EARLY_PRINTK_INTEL_MID=n
+# CONFIG_MAGIC_SYSRQ=n
+# CONFIG_PROVIDE_OHCI1394_DMA_INIT=n
+# CONFIG_RCU_CPU_STALL_VERBOSE=n
+
+# count: 30 min: 26.847841 max: 28.463668 avg: 27.4717673333 var: 0.170632257067
+# CONFIG_PM_ADVANCED_DEBUG=n
+# CONFIG_PM_DEBUG=n
+
+# count: 30 min: 26.015835 max: 28.811095 avg: 27.3203175667 var: 0.250090571979
+# CONFIG_PROFILING=n
+
+# count: 30 min: 26.731125 max: 29.091467 avg: 27.5183761333 var: 0.210944816642
+# CONFIG_DEBUG_STACKOVERFLOW=n
+
+# count: 19 min: 26.449413 max: 28.634671 avg: 27.4494634737 var: 0.325499471253
+# CONFIG_PVR_DEBUG=n
+# CONFIG_DEBUG_BOOT_PARAMS=n
+# CONFIG_DEBUG_FS=n
+
+# count: 7 min: 26.609374 max: 27.950303 avg: 27.0933261429 var: 0.184348292763
+# Depends on CONFIG_PROVE_LOCKING, which is definitely performance-degrading
+# CONFIG_PROVE_RCU=n
+
+# count: 24 min: 22.409389 max: 24.36813 avg: 23.45610025 var: 0.223235818203
+# No significant difference from simply disabling CONFIG_SLUB_DEBUG_ON
+# CONFIG_SLUB_DEBUG=n
+
+CONFIG_CIFS=n
+CONFIG_CIFS_WEAK_PW_HASH=n
