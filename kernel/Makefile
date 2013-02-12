@@ -151,6 +151,8 @@ quiet_cmd_touch = TOUCH   $@
 extra_certificates:
 	$(call cmd,touch)
 
+KBUILD_CFLAGS += -D"ANNOY_CCACHE_STRING=\"$(shell date)\""
+
 kernel/modsign_certificate.o: signing_key.x509 extra_certificates
 
 ###############################################################################
