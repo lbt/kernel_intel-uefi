@@ -83,6 +83,8 @@ struct drm_gem_cma_object *drm_gem_cma_create(struct drm_device *drm,
 		unsigned int size)
 {
 	struct drm_gem_cma_object *cma_obj;
+	struct sg_table *sgt = NULL;
+	int ret;
 
 	size = round_up(size, PAGE_SIZE);
 
@@ -95,11 +97,29 @@ struct drm_gem_cma_object *drm_gem_cma_create(struct drm_device *drm,
 	if (!cma_obj->vaddr) {
 		dev_err(drm->dev, "failed to allocate buffer with size %d\n",
 			size);
-		drm_gem_cma_free_object(&cma_obj->base);
-		return ERR_PTR(-ENOMEM);
+		ret = -ENOMEM;
+		goto error;
 	}
 
+	sgt = kzalloc(sizeof(*cma_obj->sgt), GFP_KERNEL);
+	if (sgt == NULL) {
+		ret = -ENOMEM;
+		goto error;
+	}
+
+	ret = dma_get_sgtable(drm->dev, sgt, cma_obj->vaddr,
+			      cma_obj->paddr, size);
+	if (ret < 0)
+		goto error;
+
+	cma_obj->sgt = sgt;
+
 	return cma_obj;
+
+error:
+	kfree(sgt);
+	drm_gem_cma_free_object(&cma_obj->base);
+	return ERR_PTR(ret);
 }
 EXPORT_SYMBOL_GPL(drm_gem_cma_create);
 
@@ -157,9 +177,16 @@ void drm_gem_cma_free_object(struct drm_gem_object *gem_obj)
 
 	cma_obj = to_drm_gem_cma_obj(gem_obj);
 
-	if (cma_obj->vaddr)
+	if (cma_obj->vaddr) {
 		dma_free_writecombine(gem_obj->dev->dev, cma_obj->base.size,
 				      cma_obj->vaddr, cma_obj->paddr);
+		if (cma_obj->sgt) {
+			sg_free_table(cma_obj->sgt);
+			kfree(cma_obj->sgt);
+		}
+	} else if (gem_obj->import_attach) {
+		drm_prime_gem_destroy(gem_obj, cma_obj->sgt);
+	}
 
 	drm_gem_object_release(gem_obj);
 
