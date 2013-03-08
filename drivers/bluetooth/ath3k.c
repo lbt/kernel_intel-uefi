@@ -32,6 +32,9 @@
 #define VERSION "1.0"
 #define ATH3K_FIRMWARE	"ath3k-1.fw"
 
+static int ath_err(const char *fmt, ...);
+#define BT_ERR(fmt, ...)	ath_err(fmt "\n", ##__VA_ARGS__)
+
 #define ATH3K_DNLOAD				0x01
 #define ATH3K_GETSTATE				0x05
 #define ATH3K_SET_NORMAL_MODE			0x07
@@ -497,7 +500,23 @@ static void ath3k_disconnect(struct usb_interface *intf)
 {
 	BT_DBG("ath3k_disconnect intf %p", intf);
 }
+static int ath_err(const char *format, ...)
+{
+	struct va_format vaf;
+	va_list args;
+	int r;
 
+	va_start(args, format);
+
+	vaf.fmt = format;
+	vaf.va = &args;
+
+	r = pr_err("%pV", &vaf);
+
+	va_end(args);
+
+	return r;
+}
 static struct usb_driver ath3k_driver = {
 	.name		= "ath3k",
 	.probe		= ath3k_probe,
