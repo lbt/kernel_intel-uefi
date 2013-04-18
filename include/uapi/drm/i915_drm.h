@@ -223,6 +223,7 @@ typedef struct _drm_i915_sarea {
 #define DRM_I915_GEM_GET_CACHING	0x30
 #define DRM_I915_REG_READ		0x31
 #define DRM_I915_ENABLE_PLANE_RESERVED_REG_BIT_2	0x37
+#define DRM_I915_SET_PLANE_ZORDER	0x32
 
 #define DRM_IOCTL_I915_INIT		DRM_IOW( DRM_COMMAND_BASE + DRM_I915_INIT, drm_i915_init_t)
 #define DRM_IOCTL_I915_FLUSH		DRM_IO ( DRM_COMMAND_BASE + DRM_I915_FLUSH)
@@ -275,6 +276,9 @@ typedef struct _drm_i915_sarea {
 #define DRM_IOCTL_I915_ENABLE_PLANE_RESERVED_REG_BIT_2	\
 	DRM_IOW(DRM_COMMAND_BASE + DRM_I915_ENABLE_PLANE_RESERVED_REG_BIT_2, \
 	struct drm_i915_enable_plane_reserved_reg_bit_2)
+#define DRM_IOCTL_I915_SET_PLANE_ZORDER		\
+			DRM_IOW(DRM_COMMAND_BASE + DRM_I915_SET_PLANE_ZORDER, \
+			struct drm_i915_set_plane_zorder)
 
 /* Allow drivers to submit batchbuffers directly to hardware, relying
  * on the security mechanisms provided by hardware.
@@ -1039,6 +1043,8 @@ struct drm_i915_enable_plane_reserved_reg_bit_2 {
 	__u32 enable;
 	int plane;
 	int crtc_id;
+struct drm_i915_set_plane_zorder {
+	__u32 order;
 };
 
 #endif /* _UAPI_I915_DRM_H_ */
