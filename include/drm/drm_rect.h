@@ -25,14 +25,7 @@
 #define DRM_RECT_H
 
 /**
- * DOC: rect utils
- *
- * Utility functions to help manage rectangular areas for
- * clipping, scaling, etc. calculations.
- */
-
-/**
- * struct drm_rect - two dimensional rectangle
+ * drm_rect - two dimensional rectangle
  * @x1: horizontal starting coordinate (inclusive)
  * @x2: horizontal ending coordinate (exclusive)
  * @y1: vertical starting coordinate (inclusive)
@@ -131,37 +124,9 @@ static inline bool drm_rect_visible(const struct drm_rect *r)
 	return drm_rect_width(r) > 0 && drm_rect_height(r) > 0;
 }
 
-/**
- * drm_rect_equals - determine if two rectangles are equal
- * @r1: first rectangle
- * @r2: second rectangle
- *
- * RETURNS:
- * %true if the rectangles are equal, %false otherwise.
- */
-static inline bool drm_rect_equals(const struct drm_rect *r1,
-				   const struct drm_rect *r2)
-{
-	return r1->x1 == r2->x1 && r1->x2 == r2->x2 &&
-		r1->y1 == r2->y1 && r1->y2 == r2->y2;
-}
-
 bool drm_rect_intersect(struct drm_rect *r, const struct drm_rect *clip);
 bool drm_rect_clip_scaled(struct drm_rect *src, struct drm_rect *dst,
 			  const struct drm_rect *clip,
 			  int hscale, int vscale);
-int drm_rect_calc_hscale(const struct drm_rect *src,
-			 const struct drm_rect *dst,
-			 int min_hscale, int max_hscale);
-int drm_rect_calc_vscale(const struct drm_rect *src,
-			 const struct drm_rect *dst,
-			 int min_vscale, int max_vscale);
-int drm_rect_calc_hscale_relaxed(struct drm_rect *src,
-				 struct drm_rect *dst,
-				 int min_hscale, int max_hscale);
-int drm_rect_calc_vscale_relaxed(struct drm_rect *src,
-				 struct drm_rect *dst,
-				 int min_vscale, int max_vscale);
-void drm_rect_debug_print(const struct drm_rect *r, bool fixed_point);
 
 #endif
