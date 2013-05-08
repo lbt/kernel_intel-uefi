@@ -224,6 +224,8 @@ typedef struct _drm_i915_sarea {
 #define DRM_I915_REG_READ		0x31
 #define DRM_I915_ENABLE_PLANE_RESERVED_REG_BIT_2	0x37
 #define DRM_I915_SET_PLANE_ZORDER	0x32
+#define DRM_I915_EDP_PSR_CTL            0x33
+#define DRM_I915_EDP_PSR_EXIT           0x34
 #define DRM_I915_DISP_SCREEN_CONTROL	0x35
 
 #define DRM_IOCTL_I915_INIT		DRM_IOW( DRM_COMMAND_BASE + DRM_I915_INIT, drm_i915_init_t)
@@ -280,6 +282,10 @@ typedef struct _drm_i915_sarea {
 #define DRM_IOCTL_I915_SET_PLANE_ZORDER		\
 			DRM_IOW(DRM_COMMAND_BASE + DRM_I915_SET_PLANE_ZORDER, \
 			struct drm_i915_set_plane_zorder)
+#define DRM_IOCTL_I915_EDP_PSR_CTL	DRM_IOW(DRM_COMMAND_BASE + \
+			DRM_I915_EDP_PSR_CTL, struct drm_i915_edp_psr_ctl)
+#define DRM_IOCTL_I915_EDP_PSR_EXIT	DRM_IO(DRM_COMMAND_BASE + \
+							DRM_I915_EDP_PSR_EXIT)
 #define DRM_IOCTL_I915_DISP_SCREEN_CONTROL             \
 		DRM_IOW(DRM_COMMAND_BASE + DRM_I915_DISP_SCREEN_CONTROL, \
 		struct drm_i915_disp_screen_control)
@@ -317,6 +323,11 @@ typedef struct drm_i915_irq_emit {
 typedef struct drm_i915_irq_wait {
 	int irq_seq;
 } drm_i915_irq_wait_t;
+
+struct drm_i915_edp_psr_ctl {
+	int state;
+	int idle_frames;
+};
 
 /* Ioctl to query kernel params:
  */
