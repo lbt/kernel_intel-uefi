@@ -1027,8 +1027,6 @@ static void intel_hdmi_pre_enable(struct intel_encoder *encoder)
 	if (!IS_VALLEYVIEW(dev))
 		return;
 
-	WARN_ON(!mutex_is_locked(&dev_priv->dpio_lock));
-
 	/* Enable clock channels for this port */
 	val = intel_dpio_read(dev_priv, DPIO_DATA_LANE_A(port));
 	val = 0;
@@ -1071,8 +1069,6 @@ static void intel_hdmi_pre_pll_enable(struct intel_encoder *encoder)
 
 	if (!IS_VALLEYVIEW(dev))
 		return;
-
-	WARN_ON(!mutex_is_locked(&dev_priv->dpio_lock));
 
 	/* Program Tx lane resets to default */
 	intel_dpio_write(dev_priv, DPIO_PCS_TX(port),
