@@ -8256,14 +8256,6 @@ check_crtc_state(struct drm_device *dev)
 		if (crtc->pipe == PIPE_A && dev_priv->quirks & QUIRK_PIPEA_FORCE)
 			active = crtc->active;
 
-		list_for_each_entry(encoder, &dev->mode_config.encoder_list,
-				    base.head) {
-			if (encoder->base.crtc != &crtc->base)
-				continue;
-			if (encoder->get_config)
-				encoder->get_config(encoder, &pipe_config);
-		}
-
 		WARN(crtc->active != active,
 		     "crtc active state doesn't match with hw state "
 		     "(expected %i, found %i)\n", crtc->active, active);
