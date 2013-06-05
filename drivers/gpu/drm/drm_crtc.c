@@ -906,6 +906,7 @@ void drm_plane_cleanup(struct drm_plane *plane)
 }
 EXPORT_SYMBOL(drm_plane_cleanup);
 
+
 /**
  * drm_plane_force_disable - Forcibly disable a plane
  * @plane: plane to disable
