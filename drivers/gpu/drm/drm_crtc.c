@@ -258,7 +258,7 @@ static char printable_char(int c)
 	return isascii(c) && isprint(c) ? c : '?';
 }
 
-char *drm_get_format_name(uint32_t format)
+const char *drm_get_format_name(uint32_t format)
 {
 	static char buf[32];
 
