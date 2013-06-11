@@ -2563,6 +2563,10 @@ u32 intel_sbi_read(struct drm_i915_private *dev_priv, u16 reg,
 void intel_sbi_write(struct drm_i915_private *dev_priv, u16 reg, u32 value,
 		     enum intel_sbi_destination destination);
 
+int intel_pmc_read32(struct drm_i915_private *dev_priv, u32 reg,  u32 *val);
+int intel_pmc_write32(struct drm_i915_private *dev_priv, u32 reg, u32 val);
+int intel_pmc_write32_bits(struct drm_i915_private *dev_priv, \
+			u32 reg, u32 val, u32 mask);
 int vlv_gpu_freq(struct drm_i915_private *dev_priv, int val);
 int vlv_freq_opcode(struct drm_i915_private *dev_priv, int val);
 
@@ -2608,6 +2612,13 @@ void vlv_force_wake_put(struct drm_i915_private *dev_priv, int fw_engine);
 #define INTEL_BROADCAST_RGB_AUTO 0
 #define INTEL_BROADCAST_RGB_FULL 1
 #define INTEL_BROADCAST_RGB_LIMITED 2
+
+#define intel_pmc_read(dev_priv, reg, val) \
+		intel_pmc_read32(dev_priv, reg, val)
+#define intel_pmc_write(dev_priv, reg, val) \
+		intel_pmc_write32(dev_priv, reg, val)
+#define intel_pmc_write_bits(dev_priv, reg, val, mask) \
+		intel_pmc_write32_bits(dev_priv, reg, val, mask)
 
 static inline uint32_t i915_vgacntrl_reg(struct drm_device *dev)
 {
