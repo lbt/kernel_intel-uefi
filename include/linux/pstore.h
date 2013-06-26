@@ -35,6 +35,7 @@ enum pstore_type_id {
 	PSTORE_TYPE_MCE		= 1,
 	PSTORE_TYPE_CONSOLE	= 2,
 	PSTORE_TYPE_FTRACE	= 3,
+	PSTORE_TYPE_EXTRA	= 4,
 	PSTORE_TYPE_UNKNOWN	= 255
 };
 
@@ -66,8 +67,32 @@ struct pstore_info {
 	void		*data;
 };
 
+struct pstore_extra_dumper {
+	struct list_head list;	/* pstore's private list */
+	const char	*name;
+	/*
+	 * get_data - called by pstore to ask data to be written into
+	 * persistent storage when a crash happens.
+	 * @pstore_buf:	buffer provided by pstore to retrieve data.
+	 * @len:		the length of pstore_buf.
+	 * @read:		actual bytes read to pstore buffer
+	 * @priv:		client's private data
+	 * @return:		0 for success, or <0 with error no
+	 */
+	int		(*get_data)(char *pstore_buf, size_t len,
+			size_t *read, void *priv);
+	void	*priv;	/* clients's private data */
+};
+
 #ifdef CONFIG_PSTORE
 extern int pstore_register(struct pstore_info *);
+
+extern
+int pstore_register_extra_dumper(struct pstore_extra_dumper *extra_dumper);
+
+extern
+int pstore_unregister_extra_dumper(struct pstore_extra_dumper *extra_dumper);
+
 extern bool pstore_cannot_block_path(enum kmsg_dump_reason reason);
 #else
 static inline int
@@ -79,6 +104,14 @@ static inline bool
 pstore_cannot_block_path(enum kmsg_dump_reason reason)
 {
 	return false;
+}
+static pstore_register_extra_dumper(struct pstore_extra_dumper *extra_dumper)
+{
+	return 0;
+}
+static pstore_unregister_extra_dumper(struct pstore_extra_dumper *extra_dumper)
+{
+	return 0;
 }
 #endif
 
