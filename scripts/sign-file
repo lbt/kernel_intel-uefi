@@ -5,7 +5,8 @@
 
 my $USAGE =
 "Usage: scripts/sign-file [-v] <hash algo> <key> <x509> <module> [<dest>]\n" .
-"       scripts/sign-file [-v] -s <raw sig> <hash algo> <x509> <module> [<dest>]\n";
+"       scripts/sign-file [-v] -s <raw sig> <hash algo> <x509> <module> [<dest>]\n" .
+"       scripts/sign-file [-v] -u <module> [<dest>]\n";
 
 use strict;
 use FileHandle;
@@ -13,20 +14,33 @@ use IPC::Open2;
 use Getopt::Std;
 
 my %opts;
-getopts('vs:', \%opts) or die $USAGE;
+getopts('vsu:', \%opts) or die $USAGE;
 my $verbose = $opts{'v'};
 my $signature_file = $opts{'s'};
+my $unsign = $opts{'u'};
 
 die $USAGE if ($#ARGV > 4);
-die $USAGE if (!$signature_file && $#ARGV < 3 || $signature_file && $#ARGV < 2);
+die $USAGE if (!$unsign && !$signature_file && $#ARGV < 3 || $signature_file && $#ARGV < 2);
+die $USAGE if ($unsign && $#ARGV < -1);
 
-my $dgst = shift @ARGV;
+my $dgst;
 my $private_key;
-if (!$signature_file) {
+my $module;
+my $x509;
+
+if ($unsign) {
+  $module = $unsign;
+} elsif (!$signature_file){
+  $dgst = shift @ARGV;
 	$private_key = shift @ARGV;
+  $x509 = shift @ARGV;
+  $module = shift @ARGV;
+} else {
+  $dgst = shift @ARGV;
+  $x509 = shift @ARGV;
+  $module = shift @ARGV;
 }
-my $x509 = shift @ARGV;
-my $module = shift @ARGV;
+
 my ($dest, $keep_orig);
 if (@ARGV) {
 	$dest = $ARGV[0];
@@ -35,10 +49,12 @@ if (@ARGV) {
 	$dest = $module . "~";
 }
 
-die "Can't read private key\n" if (!$signature_file && !-r $private_key);
-die "Can't read signature file\n" if ($signature_file && !-r $signature_file);
-die "Can't read X.509 certificate\n" unless (-r $x509);
-die "Can't read module\n" unless (-r $module);
+if (!$unsign) {
+  die "Can't read private key\n" if (!$signature_file && !-r $private_key);
+  die "Can't read signature file\n" if ($signature_file && !-r $signature_file);
+  die "Can't read X.509 certificate\n" unless (-r $x509);
+}
+die "Can't read module ",$module,"\n" unless (-r $module);
 
 #
 # Function to read the contents of a file into a variable.
@@ -58,6 +74,47 @@ sub read_file($)
     die "$file: Wanted length ", $st[7], ", got ", $len, "\n"
 	if ($len != $st[7]);
     return $contents;
+}
+
+#
+# Read the module and remove any existing signature
+#
+my $unsigned_module = read_file($module);
+
+my $magic_number = "~Module signature appended~\n";
+
+if (substr($unsigned_module, - length($magic_number)) eq $magic_number) {
+    my $template = "xxxCCxxxN";
+    my $tempsize = 12;
+    if ($verbose) {
+        print "Module is already signed, removing\n";
+    }
+    # Get offset right before the info block
+    my $pos = length($unsigned_module) - (length($magic_number) + $tempsize);
+    my($nlen, $klen, $slen) = unpack("xxxCCxxxN",
+                substr($unsigned_module, $pos, $tempsize));
+    # Subtract out all these fields to get position of end of module data
+    $pos = $pos - ($nlen + $klen + $slen);
+    $unsigned_module = substr($unsigned_module, 0, $pos);
+}
+
+#
+# If we just want to remove signature then we'll stop here
+#
+
+if ($unsign) {
+    open(FD, ">$dest") || die $dest;
+    binmode FD;
+    print FD $unsigned_module;
+    close FD || die $dest;
+}
+
+if ($unsign && !$keep_orig) {
+    rename($dest, $module) || die $module;
+}
+
+if ($unsign) {
+    exit 1;
 }
 
 ###############################################################################
@@ -350,27 +407,7 @@ if ($dgst eq "sha1") {
     die "Unknown hash algorithm: $dgst\n";
 }
 
-#
-# Read the module and remove any existing signature
-#
-my $unsigned_module = read_file($module);
 
-my $magic_number = "~Module signature appended~\n";
-
-if (substr($unsigned_module, - length($magic_number)) eq $magic_number) {
-    my $template = "xxxCCxxxN";
-    my $tempsize = 12;
-    if ($verbose) {
-        print "Module is already signed, removing\n";
-    }
-    # Get offset right before the info block
-    my $pos = length($unsigned_module) - (length($magic_number) + $tempsize);
-    my($nlen, $klen, $slen) = unpack("xxxCCxxxN",
-                substr($unsigned_module, $pos, $tempsize));
-    # Subtract out all these fields to get position of end of module data
-    $pos = $pos - ($nlen + $klen + $slen);
-    $unsigned_module = substr($unsigned_module, 0, $pos);
-}
 
 my $signature;
 if ($signature_file) {
