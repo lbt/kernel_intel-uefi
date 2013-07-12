@@ -10211,9 +10211,6 @@ int i915_enable_plane_reserved_reg_bit_2(struct drm_device *dev, void *data,
 }
 
 
-#ifdef CONFIG_DEBUG_FS
-#include <linux/seq_file.h>
-
 struct intel_display_error_state {
 
 	u32 power_well_driver;
@@ -10357,4 +10354,3 @@ intel_display_print_error_state(struct drm_i915_error_state_buf *m,
 		err_printf(m, "  BASE: %08x\n", error->cursor[i].base);
 	}
 }
-#endif
