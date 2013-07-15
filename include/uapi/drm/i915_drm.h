@@ -64,6 +64,15 @@
 				 * of chars for next/prev indices */
 #define I915_LOG_MIN_TEX_REGION_SIZE 14
 #define MAX_CSC_COEFFICIENTS 9
+#define PLANEA		1
+#define SPRITEA		2
+#define SPRITEB		3
+#define PLANEB		4
+#define SPRITEC		5
+#define SPRITED		6
+#define CURSORA		7
+#define CURSORB		8
+
 struct drm_intel_csc_params {
 	float   m_CSCCoeff[MAX_CSC_COEFFICIENTS];
 };
@@ -269,6 +278,7 @@ struct csc_coeff {
 #define DRM_I915_SET_CSC		0x39
 #define DRM_I915_DPST_CONTEXT   0x3b
 #define DRM_I915_GEM_ACCESS_USERDATA	0x3c
+#define DRM_I915_SET_PLANE_ALPHA	0x3d
 #define DRM_I915_CMD_PARSER_APPEND	0x3f
 
 #define DRM_IOCTL_I915_INIT		DRM_IOW( DRM_COMMAND_BASE + DRM_I915_INIT, drm_i915_init_t)
@@ -323,6 +333,9 @@ struct csc_coeff {
 			DRM_IOW(DRM_COMMAND_BASE + DRM_I915_SET_PLANE_ZORDER, \
 			struct drm_i915_set_plane_zorder)
 #define DRM_IOCTL_I915_GET_RESET_STATS		DRM_IOWR (DRM_COMMAND_BASE + DRM_I915_GET_RESET_STATS, struct drm_i915_reset_stats)
+#define DRM_IOCTL_I915_SET_PLANE_ALPHA		\
+			DRM_IOW(DRM_COMMAND_BASE + DRM_I915_SET_PLANE_ALPHA, \
+			struct drm_i915_set_plane_alpha)
 #define DRM_IOCTL_I915_SET_PLANE_180_ROTATION  \
 		DRM_IOW(DRM_COMMAND_BASE + DRM_I915_SET_PLANE_180_ROTATION, \
 		struct drm_i915_plane_180_rotation)
@@ -1147,6 +1160,11 @@ struct drm_i915_enable_plane_reserved_reg_bit_2 {
 	__u32 enable;
 	int plane;
 	int crtc_id;
+};
+
+struct drm_i915_set_plane_alpha {
+	int plane;
+	int alpha;
 };
 
 /* Total number of DIET entries */
