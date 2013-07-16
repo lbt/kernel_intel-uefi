@@ -1,5 +1,6 @@
 #include <linux/kernel.h>
 #include <linux/sched.h>
+#include <linux/slab.h>
 #include <linux/cred.h>
 #include <linux/err.h>
 #include <linux/efi.h>
