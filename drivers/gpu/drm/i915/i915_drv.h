@@ -1987,6 +1987,8 @@ extern int intel_enable_rc6(const struct drm_device *dev);
 extern bool i915_semaphore_is_enabled(struct drm_device *dev);
 int i915_reg_read_ioctl(struct drm_device *dev, void *data,
 			struct drm_file *file);
+int i915_enable_plane_reserved_reg_bit_2(struct drm_device *dev, void *data,
+					struct drm_file *file);
 
 /* overlay */
 #ifdef CONFIG_DEBUG_FS
