@@ -719,6 +719,7 @@ static long mei_compat_ioctl(struct file *file,
 			return ret;
 
 		__get_user(req32.handle, &req->handle);
+		__get_user(req32.length, &req->length);
 
 		if (copy_to_user((char __user *)arg, &req32,  sizeof(req32)))
 			return -EFAULT;

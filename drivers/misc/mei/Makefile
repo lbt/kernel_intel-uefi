@@ -12,6 +12,7 @@ mei-objs += amthif.o
 mei-objs += wd.o
 mei-objs += bus.o
 mei-objs += nfc.o
+mei-objs += dma-sg.o
 mei-$(CONFIG_DEBUG_FS) += debugfs.o
 
 obj-$(CONFIG_INTEL_MEI_ME) += mei-me.o
