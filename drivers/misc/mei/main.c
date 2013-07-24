@@ -43,6 +43,8 @@
 #include "hw-me.h"
 #include "client.h"
 
+#include "pavp.h"
+
 /**
  * mei_open - the open function
  *
@@ -420,9 +422,11 @@ static ssize_t mei_write(struct file *file, const char __user *ubuf,
 		}
 		mutex_unlock(&dev->device_lock);
 		return length;
-	}
-
-	rets = mei_cl_write(cl, write_cb, false);
+	} else if (uuid_le_cmp(pavp_uuid,
+			dev->me_clients[id].props.protocol_name) == 0)
+		rets = mei_pavp_write(cl, write_cb);
+	else
+		rets = mei_cl_write(cl, write_cb, false);
 out:
 	mutex_unlock(&dev->device_lock);
 	if (rets < 0)
