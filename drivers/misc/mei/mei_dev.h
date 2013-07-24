@@ -20,6 +20,7 @@
 #include <linux/types.h>
 #include <linux/watchdog.h>
 #include <linux/poll.h>
+#include <linux/idr.h>
 #include <linux/mei.h>
 #include <linux/mei_cl_bus.h>
 
@@ -198,6 +199,8 @@ struct mei_cl {
 	enum mei_file_transaction_states reading_state;
 	enum mei_file_transaction_states writing_state;
 	struct mei_cl_cb *read_cb;
+
+	struct idr dmabuf_idr;
 
 	/* MEI CL bus data */
 	struct mei_cl_device *device;

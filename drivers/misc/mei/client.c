@@ -220,6 +220,7 @@ void mei_cl_init(struct mei_cl *cl, struct mei_device *dev)
 	init_waitqueue_head(&cl->tx_wait);
 	INIT_LIST_HEAD(&cl->link);
 	INIT_LIST_HEAD(&cl->device_link);
+	idr_init(&cl->dmabuf_idr);
 	cl->reading_state = MEI_IDLE;
 	cl->writing_state = MEI_IDLE;
 	cl->dev = dev;
@@ -909,6 +910,7 @@ void mei_cl_all_disconnect(struct mei_device *dev)
 		cl->mei_flow_ctrl_creds = 0;
 		cl->read_cb = NULL;
 		cl->timer_count = 0;
+		mei_cl_dmabuf_all_release(cl);
 	}
 }
 
@@ -948,4 +950,62 @@ void mei_cl_all_write_clear(struct mei_device *dev)
 	}
 }
 
+/* DMA */
+#include "dma-sg.h"
+static int mei_cl_dmabuf_add(struct mei_cl *cl, void *buf)
+{
+	return idr_alloc(&cl->dmabuf_idr, buf, 0, 0, GFP_KERNEL);
+}
 
+int mei_cl_dmabuf_setup(struct mei_cl *cl,
+			       struct mei_client_dma_data *data)
+{
+	void *buf;
+	int id;
+	down_read(&current->mm->mmap_sem);
+	buf = mei_dma_sg_get_userptr(data->userptr, data->length, 1);
+	up_read(&current->mm->mmap_sem);
+	if (!buf)
+		return -ENOMEM;
+	id = mei_cl_dmabuf_add(cl, buf);
+	if (id < 0)
+		mei_dma_sg_put_userptr(buf);
+	return id;
+}
+
+int mei_cl_dmabuf_unset(struct mei_cl *cl, int handle)
+{
+	void *buf = idr_find(&cl->dmabuf_idr, handle);
+	if (!buf)
+		return -EINVAL;
+
+	mei_dma_sg_put_userptr(buf);
+	idr_remove(&cl->dmabuf_idr, handle);
+	return 0;
+}
+
+void *mei_cl_dmabuf_get(struct mei_cl *cl, int handle)
+{
+	return idr_find(&cl->dmabuf_idr, handle);
+}
+
+int mei_cl_dmabuf_map(struct mei_cl *cl, void *buf)
+{
+	if (!buf)
+		return -ENOENT;
+	return mei_sg_buf_prepare(&cl->dev->pdev->dev, buf);
+}
+
+static int __mei_cl_dmabuf_release(int id, void *buf, void *data)
+{
+	struct mei_cl *cl = data;
+	dev_dbg(&cl->dev->pdev->dev, "release dma buf %d\n", id);
+	mei_dma_sg_put_userptr(buf);
+	return 0;
+}
+
+void mei_cl_dmabuf_all_release(struct mei_cl *cl)
+{
+	idr_for_each(&cl->dmabuf_idr, __mei_cl_dmabuf_release, cl);
+	idr_destroy(&cl->dmabuf_idr);
+}

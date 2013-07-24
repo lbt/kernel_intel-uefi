@@ -142,6 +142,7 @@ static int mei_release(struct inode *inode, struct file *file)
 	    cl->me_client_id);
 
 	mei_cl_unlink(cl);
+	mei_cl_dmabuf_all_release(cl);
 
 
 	/* free read cb */
@@ -528,13 +529,51 @@ end:
 static int mei_ioctl_client_setup_buf(struct file *file,
 				      struct mei_client_dma_data *data)
 {
+
+	struct mei_device *dev;
+	struct mei_cl *cl;
+	int id;
+
+	cl = file->private_data;
+	if (WARN_ON(!cl || !cl->dev))
+		return -ENODEV;
+
+	dev = cl->dev;
+
+	if (!mei_cl_is_connected(cl))
+		return -ENODEV;
+
+	if (!data->userptr)
+		return -EINVAL;
+
+	id = mei_cl_dmabuf_setup(cl, data);
+	/* FIXME valudate id */
+
+	data->handle = id;
+
+	dev_dbg(&dev->pdev->dev,  "userptr=%lX, length=%d, handle=%X\n",
+		data->userptr, data->length, data->handle);
+
 	return 0;
 }
 
 static int mei_ioctl_client_unset_buf(struct file *file,
 				      struct mei_client_dma_handle *handle)
 {
-	return 0;
+	struct mei_cl *cl;
+	int rets;
+	int id = handle->handle;
+
+	cl = file->private_data;
+	if (WARN_ON(!cl || !cl->dev))
+		return -ENODEV;
+
+	if (!mei_cl_is_connected(cl))
+		return -ENODEV;
+
+	rets = mei_cl_dmabuf_unset(cl, id);
+
+	return rets;
 }
 /**
  * mei_ioctl - the IOCTL function
