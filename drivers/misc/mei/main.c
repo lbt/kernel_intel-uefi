@@ -525,7 +525,17 @@ end:
 	return rets;
 }
 
+static int mei_ioctl_client_setup_buf(struct file *file,
+				      struct mei_client_dma_data *data)
+{
+	return 0;
+}
 
+static int mei_ioctl_client_unset_buf(struct file *file,
+				      struct mei_client_dma_handle *handle)
+{
+	return 0;
+}
 /**
  * mei_ioctl - the IOCTL function
  *
@@ -540,6 +550,8 @@ static long mei_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 	struct mei_device *dev;
 	struct mei_cl *cl = file->private_data;
 	struct mei_connect_client_data *connect_data = NULL;
+	struct mei_client_dma_data buf_data;
+	struct mei_client_dma_handle buf_handle;
 	int rets;
 
 
@@ -590,9 +602,54 @@ static long mei_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 		}
 
 		break;
+	case IOCTL_MEI_SETUP_DMA_BUF:
+		dev_dbg(&dev->pdev->dev, ": IOCTL_MEI_SETUP_DMA_BUF\n");
+
+		if (cl->state != MEI_FILE_CONNECTED) {
+			dev_warn(&dev->pdev->dev, "cannot setup dma buf while not connected\n");
+			rets = -EINVAL;
+			goto out;
+		}
+		if (copy_from_user(&buf_data, (char __user *)data,
+					sizeof(struct mei_client_dma_data))) {
+			dev_err(&dev->pdev->dev, "failed to copy data from userland\n");
+			rets = -EFAULT;
+			goto out;
+		}
+
+		dev_dbg(&dev->pdev->dev, "userptr=0x%lX length=%d handle=0x%X\n",
+			buf_data.userptr, buf_data.length, buf_data.handle);
+
+		rets = mei_ioctl_client_setup_buf(file, &buf_data);
+
+		/* if all is ok, copying the data back to user. */
+		if (rets)
+			goto out;
+
+		dev_dbg(&dev->pdev->dev, "copy connect data to user\n");
+		if (copy_to_user((char __user *)data, &buf_data,
+					sizeof(struct mei_client_dma_data))) {
+			dev_err(&dev->pdev->dev, "failed to copy data to userland\n");
+			rets = -EFAULT;
+			goto out;
+		}
+		break;
+	case IOCTL_MEI_UNSET_DMA_BUF:
+		if (copy_from_user(&buf_handle, (char __user *)data,
+					sizeof(struct mei_client_dma_handle))) {
+			dev_err(&dev->pdev->dev, "failed to copy data from userland\n");
+			rets = -EFAULT;
+			goto out;
+		}
+		rets = mei_ioctl_client_unset_buf(file, &buf_handle);
+		if (rets)
+			goto out;
+		dev_dbg(&dev->pdev->dev, ": IOCTL_MEI_UNSET_DMA_BUF\n");
+		break;
 	default:
 		dev_err(&dev->pdev->dev, ": unsupported ioctl %d.\n", cmd);
 		rets = -EINVAL;
+		break;
 	}
 
 out:
@@ -611,12 +668,67 @@ out:
  * returns 0 on success , <0 on error
  */
 #ifdef CONFIG_COMPAT
+
+#define IOCTL_MEI_SETUP_DMA_BUF32	\
+	_IOWR('H' , 0x02, struct mei_client_dma_data32)
+
+struct mei_client_dma_data32 {
+	union {
+		compat_ulong_t userptr;
+	};
+	__u32                  length;
+	__u32                  handle;
+};
+
 static long mei_compat_ioctl(struct file *file,
-			unsigned int cmd, unsigned long data)
+			unsigned int cmd, unsigned long arg)
 {
-	return mei_ioctl(file, cmd, (unsigned long)compat_ptr(data));
+	struct mei_device *dev;
+	struct mei_cl *cl = file->private_data;
+
+
+	if (WARN_ON(!cl || !cl->dev))
+		return -ENODEV;
+
+	dev = cl->dev;
+
+	dev_dbg(&dev->pdev->dev, "COMPAT IOCTL cmd = 0x%x", cmd);
+	if (cmd == IOCTL_MEI_SETUP_DMA_BUF32) {
+		struct mei_client_dma_data32 req32;
+		struct mei_client_dma_data __user *req;
+		long ret = 0;
+
+		if (copy_from_user(&req32, (void __user *)arg, sizeof(req32)))
+			return -EFAULT;
+
+		dev_dbg(&dev->pdev->dev, "compat userptr=0x%lX length=%d handle=0x%X\n",
+			(unsigned long)req32.userptr,
+			req32.length, req32.handle);
+
+		req = compat_alloc_user_space(sizeof(*req));
+
+		if (!access_ok(VERIFY_WRITE, req, sizeof(*req))  ||
+			__put_user(req32.userptr, &req->userptr) ||
+			__put_user(req32.length, &req->length)   ||
+			__put_user(req32.handle, &req->handle))
+			return -EFAULT;
+
+		ret = mei_ioctl(file, IOCTL_MEI_SETUP_DMA_BUF,
+				(unsigned long)req);
+		if (ret)
+			return ret;
+
+		__get_user(req32.handle, &req->handle);
+
+		if (copy_to_user((char __user *)arg, &req32,  sizeof(req32)))
+			return -EFAULT;
+
+		return ret;
+	}
+
+	return mei_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
 }
-#endif
+#endif /* CONFIG_COMPAT */
 
 
 /**
