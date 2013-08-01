@@ -351,6 +351,47 @@ static struct uvc_control_info uvc_ctrls[] = {
 				| UVC_CTRL_FLAG_RESTORE
 				| UVC_CTRL_FLAG_AUTO_UPDATE,
 	},
+	{
+		.entity		= UVC_RTK_GUID_UVC_EXTENSION,
+		.selector	= UVC_XU_RTK_ISP_SPECIAL_EFFECT_CONTROL,
+		.index		= 1,
+		.size		= 2,
+		.flags		= UVC_CTRL_FLAG_GET_CUR | UVC_CTRL_FLAG_SET_CUR
+				| UVC_CTRL_FLAG_GET_DEF | UVC_CTRL_FLAG_GET_MIN
+				| UVC_CTRL_FLAG_GET_MAX | UVC_CTRL_FLAG_GET_RANGE
+				| UVC_CTRL_FLAG_GET_RES,
+	},
+	{
+		.entity         = UVC_RTK_GUID_UVC_EXTENSION,
+		.selector       = UVC_XU_RTK_ROI_CONTROL,
+		.index          = 19,
+		.size           = 10,
+		.flags          = UVC_CTRL_FLAG_GET_CUR | UVC_CTRL_FLAG_SET_CUR
+				| UVC_CTRL_FLAG_GET_DEF | UVC_CTRL_FLAG_GET_MIN
+				| UVC_CTRL_FLAG_GET_MAX,
+	},
+};
+
+static struct uvc_menu_info special_effect_controls[] = {
+	{ 1, "Normal Effect" },
+	{ 2, "Monochrome Effect" },
+	{ 4, "Gray Effect" },
+	{ 8, "Negative Effect" },
+	{ 16, "Sepia Effect" },
+	{ 32, "Greenish Effect" },
+	{ 64, "Reddish Effect" },
+	{ 128, "Bluish Effect" },
+};
+
+static const struct uvc_menu_info roi_auto_controls[] = {
+	{ 1,   "Auto Exposure" },
+	{ 2,   "Auto Iris" },
+	{ 4,   "Auto While Balance" },
+	{ 8,   "Auto Focus"},
+	{ 16,  "Auto Face Detect"},
+	{ 32,  "Auto Detect and Track"},
+	{ 64,  "Image Stabilization"},
+	{ 128, "Higher Quality"},
 };
 
 static struct uvc_menu_info power_line_frequency_controls[] = {
@@ -685,6 +726,70 @@ static struct uvc_control_mapping uvc_ctrl_mappings[] = {
 		.offset		= 0,
 		.v4l2_type	= V4L2_CTRL_TYPE_BOOLEAN,
 		.data_type	= UVC_CTRL_DATA_TYPE_BOOLEAN,
+	},
+	{
+		.id		= V4L2_CID_COLORFX,
+		.name		= "Color Effects",
+		.entity		= UVC_RTK_GUID_UVC_EXTENSION,
+		.selector	= UVC_XU_RTK_ISP_SPECIAL_EFFECT_CONTROL,
+		.size		= 16,
+		.offset		= 0,
+		.v4l2_type	= V4L2_CTRL_TYPE_MENU,
+		.data_type	= UVC_CTRL_DATA_TYPE_UNSIGNED,
+		.menu_info	= special_effect_controls,
+		.menu_count	= ARRAY_SIZE(special_effect_controls),
+	},
+	{
+		.id             = V4L2_CID_ROI_TOP,
+		.name           = "RTK ROI Top",
+		.entity         = UVC_RTK_GUID_UVC_EXTENSION,
+		.selector       = UVC_XU_RTK_ROI_CONTROL,
+		.size           = 16,
+		.offset         = 0,
+		.v4l2_type      = V4L2_CTRL_TYPE_INTEGER,
+		.data_type      = UVC_CTRL_DATA_TYPE_UNSIGNED,
+	},
+	{
+		.id             = V4L2_CID_ROI_LEFT,
+		.name           = "RTK ROI Left",
+		.entity         = UVC_RTK_GUID_UVC_EXTENSION,
+		.selector       = UVC_XU_RTK_ROI_CONTROL,
+		.size           = 16,
+		.offset         = 16,
+		.v4l2_type      = V4L2_CTRL_TYPE_INTEGER,
+		.data_type      = UVC_CTRL_DATA_TYPE_UNSIGNED,
+	},
+	{
+		.id             = V4L2_CID_ROI_BOTTOM,
+		.name           = "RTK ROI Bottom",
+		.entity         = UVC_RTK_GUID_UVC_EXTENSION,
+		.selector       = UVC_XU_RTK_ROI_CONTROL,
+		.size           = 16,
+		.offset         = 32,
+		.v4l2_type      = V4L2_CTRL_TYPE_INTEGER,
+		.data_type      = UVC_CTRL_DATA_TYPE_UNSIGNED,
+	},
+	{
+		.id             = V4L2_CID_ROI_RIGHT,
+		.name           = "RTK ROI Right",
+		.entity         = UVC_RTK_GUID_UVC_EXTENSION,
+		.selector       = UVC_XU_RTK_ROI_CONTROL,
+		.size           = 16,
+		.offset         = 48,
+		.v4l2_type      = V4L2_CTRL_TYPE_INTEGER,
+		.data_type      = UVC_CTRL_DATA_TYPE_UNSIGNED,
+	},
+	{
+		.id             = V4L2_CID_ROI_AUTO_CONTROL,
+		.name           = "RTK ROI Auto Control",
+		.entity         = UVC_RTK_GUID_UVC_EXTENSION,
+		.selector       = UVC_XU_RTK_ROI_CONTROL,
+		.size           = 16,
+		.offset         = 64,
+		.v4l2_type      = V4L2_CTRL_TYPE_MENU,
+		.data_type      = UVC_CTRL_DATA_TYPE_BITMASK,
+		.menu_info      = roi_auto_controls,
+		.menu_count     = ARRAY_SIZE(roi_auto_controls),
 	},
 };
 
