@@ -1421,6 +1421,8 @@ typedef struct drm_i915_private {
 	/* Old ums support infrastructure, same warning applies. */
 	struct i915_ums_state ums;
 
+	bool csc_enabled;
+	bool is_hdmi;
 	u16 is_mipi;
 	u16 mipi_panel_id;
 } drm_i915_private_t;
