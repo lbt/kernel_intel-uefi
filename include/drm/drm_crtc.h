@@ -30,6 +30,7 @@
 #include <linux/types.h>
 #include <linux/idr.h>
 #include <linux/fb.h>
+#include <linux/hdmi.h>
 #include <drm/drm_mode.h>
 
 #include <drm/drm_fourcc.h>
@@ -117,12 +118,14 @@ enum drm_mode_status {
 #define DRM_MODE_TYPE_CLOCK_CRTC_C (DRM_MODE_TYPE_CLOCK_C | \
 				    DRM_MODE_TYPE_CRTC_C)
 
-#define DRM_MODE(nm, t, c, hd, hss, hse, ht, hsk, vd, vss, vse, vt, vs, f) \
+#define DRM_MODE(nm, t, c, hd, hss, hse, ht, hsk, vd, vss, vse, vt, vs, f, \
+	ar) \
 	.name = nm, .status = 0, .type = (t), .clock = (c), \
 	.hdisplay = (hd), .hsync_start = (hss), .hsync_end = (hse), \
 	.htotal = (ht), .hskew = (hsk), .vdisplay = (vd), \
 	.vsync_start = (vss), .vsync_end = (vse), .vtotal = (vt), \
 	.vscan = (vs), .flags = (f), \
+	.picture_aspect_ratio = (ar), \
 	.base.type = DRM_MODE_OBJECT_MODE
 
 #define CRTC_INTERLACE_HALVE_V	(1 << 0) /* halve V values for interlacing */
@@ -181,6 +184,8 @@ struct drm_display_mode {
 
 	int vrefresh;		/* in Hz */
 	int hsync;		/* in kHz */
+
+	enum hdmi_picture_aspect picture_aspect_ratio;
 };
 
 static inline bool drm_mode_is_stereo(const struct drm_display_mode *mode)
