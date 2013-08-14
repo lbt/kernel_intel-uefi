@@ -989,6 +989,7 @@ struct drm_i915_reg_read {
 struct drm_i915_enable_plane_reserved_reg_bit_2 {
 	__u32 enable;
 	int plane;
+	int crtc_id;
 };
 
 #endif /* _UAPI_I915_DRM_H_ */

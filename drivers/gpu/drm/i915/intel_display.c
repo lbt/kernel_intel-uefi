@@ -9969,19 +9969,17 @@ int i915_enable_plane_reserved_reg_bit_2(struct drm_device *dev, void *data,
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	struct drm_i915_enable_plane_reserved_reg_bit_2 *rrb = data;
 	u32 enable = rrb->enable;
-	int plane = rrb->plane;
 	u32 val, reg1, reg2;
 	u32 pipe_id;
 
 	/* Added this code for making pipe generalization in HSW */
-	struct drm_i915_get_pipe_from_crtc_id *pipe_from_crtc_id = data;
 	struct drm_mode_object *drmmode_obj;
 	struct intel_crtc *crtc;
 
 	if (!drm_core_check_feature(dev, DRIVER_MODESET))
 		return -ENODEV;
 
-	drmmode_obj = drm_mode_object_find(dev, pipe_from_crtc_id->crtc_id,
+	drmmode_obj = drm_mode_object_find(dev, rrb->crtc_id,
 			DRM_MODE_OBJECT_CRTC);
 
 	if (!drmmode_obj) {
