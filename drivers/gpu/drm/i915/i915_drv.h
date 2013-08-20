@@ -1686,6 +1686,9 @@ struct drm_i915_gem_object {
 
 	/** for phy allocated objects */
 	struct drm_i915_gem_phys_object *phys_obj;
+
+	/** Object userdata */
+	uint32_t userdata;
 };
 #define to_gem_object(obj) (&((struct drm_i915_gem_object *)(obj))->base)
 
@@ -2137,6 +2140,8 @@ void i915_gem_free_all_phys_object(struct drm_device *dev);
 int i915_gem_open(struct drm_device *dev, struct drm_file *file);
 void i915_gem_release(struct drm_device *dev, struct drm_file *file);
 
+int i915_gem_access_userdata(struct drm_device *dev, void *data,
+		   struct drm_file *file);
 uint32_t
 i915_gem_get_gtt_size(struct drm_device *dev, uint32_t size, int tiling_mode);
 uint32_t
