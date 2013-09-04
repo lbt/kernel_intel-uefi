@@ -475,6 +475,15 @@ struct intel_uncore {
 	struct delayed_work force_wake_work;
 };
 
+struct i915_rpm {
+	/* To make sure ring get/put are in pair */
+	bool ring_active;
+};
+
+struct i915_pm {
+	struct i915_rpm rpm;
+};
+
 #define DEV_INFO_FOR_EACH_FLAG(func, sep) \
 	func(is_mobile) sep \
 	func(is_i85x) sep \
@@ -1352,6 +1361,8 @@ typedef struct drm_i915_private {
 	void __iomem *regs;
 
 	struct intel_uncore uncore;
+
+	struct i915_pm pm;
 
 	struct intel_gmbus gmbus[GMBUS_NUM_PORTS];
 
@@ -2683,5 +2694,45 @@ timespec_to_jiffies_timeout(const struct timespec *value)
 
 	return min_t(unsigned long, MAX_JIFFY_OFFSET, j + 1);
 }
+
+/* runtime power management related */
+int i915_rpm_init(struct drm_device *dev);
+int i915_rpm_deinit(struct drm_device *dev);
+
+int i915_rpm_get_ring(struct drm_device *dev);
+int i915_rpm_put_ring(struct drm_device *dev);
+
+int i915_rpm_get_callback(struct drm_device *dev);
+int i915_rpm_put_callback(struct drm_device *dev);
+
+int i915_rpm_get_ioctl(struct drm_device *dev);
+int i915_rpm_put_ioctl(struct drm_device *dev);
+
+int i915_rpm_get_disp(struct drm_device *dev);
+int i915_rpm_put_disp(struct drm_device *dev);
+
+#ifdef CONFIG_DRM_VXD_BYT
+int i915_rpm_get_vxd(struct drm_device *dev);
+int i915_rpm_put_vxd(struct drm_device *dev);
+#endif
+
+#ifdef CONFIG_PM_RUNTIME
+/* Check for current runtime state */
+#define i915_is_device_active(drm_dev)	\
+		(drm_dev->dev->power.runtime_status == RPM_ACTIVE)
+#define i915_is_device_resuming(drm_dev)	\
+		(drm_dev->dev->power.runtime_status == RPM_RESUMING)
+#define i915_is_device_suspended(drm_dev)	\
+		(drm_dev->dev->power.runtime_status == RPM_SUSPENDED)
+#define i915_is_device_suspending(drm_dev)	\
+		(drm_dev->dev->power.runtime_status == RPM_SUSPENDING)
+
+#else /*CONFIG_PM_RUNTIME*/
+#define i915_is_device_active(dev) (true)
+#define i915_is_device_resuming(dev) (false)
+#define i915_is_device_suspended(dev) (false)
+#define i915_is_device_suspending(dev) (false)
+
+#endif /*CONFIG_PM_RUNTIME*/
 
 #endif
