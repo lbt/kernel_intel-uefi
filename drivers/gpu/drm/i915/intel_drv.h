@@ -422,6 +422,7 @@ struct intel_plane {
 			       struct drm_intel_sprite_colorkey *key);
 	void (*get_colorkey)(struct drm_plane *plane,
 			     struct drm_intel_sprite_colorkey *key);
+	u32 (*current_surface)(struct drm_plane *plane);
 };
 
 struct intel_watermark_params {
@@ -635,6 +636,8 @@ void intel_mark_fb_busy(struct drm_i915_gem_object *obj,
 			struct intel_ring_buffer *ring);
 void intel_mark_idle(struct drm_device *dev);
 void intel_crtc_restore_mode(struct drm_crtc *crtc);
+void intel_crtc_queue_unpin(struct intel_crtc *crtc,
+			    struct drm_i915_gem_object *obj);
 void intel_crtc_update_dpms(struct drm_crtc *crtc);
 void intel_encoder_destroy(struct drm_encoder *encoder);
 void intel_connector_dpms(struct drm_connector *, int mode);
