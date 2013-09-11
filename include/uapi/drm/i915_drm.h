@@ -264,6 +264,7 @@ struct csc_coeff {
 #define DRM_I915_REG_READ		0x31
 #define DRM_I915_SET_PLANE_ZORDER	0x32
 #define DRM_I915_GET_RESET_STATS	0x33
+#define DRM_I915_SET_PLANE_180_ROTATION 0x36
 #define DRM_I915_ENABLE_PLANE_RESERVED_REG_BIT_2	0x37
 #define DRM_I915_SET_CSC		0x39
 #define DRM_I915_DPST_CONTEXT   0x3b
@@ -322,6 +323,9 @@ struct csc_coeff {
 			DRM_IOW(DRM_COMMAND_BASE + DRM_I915_SET_PLANE_ZORDER, \
 			struct drm_i915_set_plane_zorder)
 #define DRM_IOCTL_I915_GET_RESET_STATS		DRM_IOWR (DRM_COMMAND_BASE + DRM_I915_GET_RESET_STATS, struct drm_i915_reset_stats)
+#define DRM_IOCTL_I915_SET_PLANE_180_ROTATION  \
+		DRM_IOW(DRM_COMMAND_BASE + DRM_I915_SET_PLANE_180_ROTATION, \
+		struct drm_i915_plane_180_rotation)
 #define DRM_IOCTL_I915_ENABLE_PLANE_RESERVED_REG_BIT_2	\
 	DRM_IOW(DRM_COMMAND_BASE + DRM_I915_ENABLE_PLANE_RESERVED_REG_BIT_2, \
 	struct drm_i915_enable_plane_reserved_reg_bit_2)
@@ -1132,6 +1136,11 @@ struct drm_i915_reset_stats {
 	__u32 batch_pending;
 
 	__u32 pad;
+};
+
+struct drm_i915_plane_180_rotation {
+	__u32 crtc_id;
+	__u32 rotate;
 };
 
 struct drm_i915_enable_plane_reserved_reg_bit_2 {

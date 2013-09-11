@@ -1927,6 +1927,7 @@ struct drm_i915_cmd_table {
 #include "i915_trace.h"
 
 extern const struct drm_ioctl_desc i915_ioctls[];
+extern struct drm_display_mode rot_mode;
 extern int i915_max_ioctl;
 extern unsigned int i915_fbpercrtc __always_unused;
 extern int i915_panel_ignore_lid __read_mostly;
@@ -2517,6 +2518,8 @@ int i915_set_plane_zorder(struct drm_device *dev, void *data,
 			  struct drm_file *file);
 int i915_get_reset_stats_ioctl(struct drm_device *dev, void *data,
 			       struct drm_file *file);
+int i915_set_plane_180_rotation(struct drm_device *dev, void *data,
+		struct drm_file *file);
 int i915_enable_plane_reserved_reg_bit_2(struct drm_device *dev, void *data,
 					struct drm_file *file);
 
