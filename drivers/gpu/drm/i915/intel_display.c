@@ -1027,6 +1027,48 @@ static void assert_dsi_pll(struct drm_i915_private *dev_priv, bool state)
 #define assert_dsi_pll_enabled(d) assert_dsi_pll(d, true)
 #define assert_dsi_pll_disabled(d) assert_dsi_pll(d, false)
 
+bool is_plane_enabled(struct drm_i915_private *dev_priv,
+			enum plane plane)
+{
+	int reg;
+	u32 val;
+
+	reg = DSPCNTR(plane);
+	val = I915_READ(reg);
+	return val & DISPLAY_PLANE_ENABLE;
+}
+
+bool is_sprite_enabled(struct drm_i915_private *dev_priv,
+			enum pipe pipe, enum plane plane)
+{
+	int reg;
+	u32 val;
+
+	reg = SPCNTR(pipe, plane);
+	val = I915_READ(reg);
+	return val & SP_ENABLE;
+}
+
+bool is_cursor_enabled(struct drm_i915_private *dev_priv,
+			enum pipe pipe)
+{
+	int reg;
+	bool ret = false;
+	u32 val;
+
+	reg = CURCNTR(pipe);
+	val = I915_READ(reg);
+
+	/* check bit 5 of cursor control register.
+	if bit 5 is 1, then cursor enabled */
+	ret = val & CUR_MODE_SEL_BIT;
+	/* if bit 5 is 0, check if bit 2:0 are all zeroes */
+	if (false == ret)
+		ret = val & CUR_ENABLE;
+
+	return ret;
+}
+
 struct intel_shared_dpll *
 intel_crtc_to_shared_dpll(struct intel_crtc *crtc)
 {
@@ -4444,7 +4486,6 @@ static void i9xx_crtc_enable(struct drm_crtc *crtc)
 	intel_crtc_load_lut(crtc);
 
 	intel_crtc->primary_enabled = true;
-	intel_update_watermarks(crtc);
 	intel_enable_pipe(dev_priv, pipe, false, false);
 	intel_enable_primary_plane(dev_priv, plane, pipe);
 	intel_enable_planes(crtc);
@@ -4457,6 +4498,7 @@ static void i9xx_crtc_enable(struct drm_crtc *crtc)
 	intel_crtc_dpms_overlay(intel_crtc, true);
 
 	intel_update_fbc(dev);
+	intel_update_watermarks(crtc);
 
 	for_each_encoder_on_crtc(dev, crtc, encoder)
 		encoder->enable(encoder);
