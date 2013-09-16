@@ -1420,6 +1420,8 @@ struct drm_i915_gem_object_ops {
 	 */
 	int (*get_pages)(struct drm_i915_gem_object *);
 	void (*put_pages)(struct drm_i915_gem_object *);
+	void (*release)(struct drm_i915_gem_object *);
+	bool (*is_userptr_obj)(void);
 };
 
 struct drm_i915_gem_object {
@@ -1577,6 +1579,23 @@ struct drm_i915_gem_object {
 	/** Object datatype */
 	uint32_t datatype;
 };
+
+struct i915_gem_userptr_object {
+	struct drm_i915_gem_object gem;
+	uintptr_t user_ptr;
+	size_t user_size;
+	int read_only;
+	struct mm_struct *mm;
+#if defined(CONFIG_MMU_NOTIFIER)
+	struct mmu_notifier mn;
+#endif
+};
+
+union drm_i915_gem_objects {
+	struct drm_i915_gem_object base;
+	struct i915_gem_userptr_object vmap;
+};
+
 #define to_gem_object(obj) (&((struct drm_i915_gem_object *)(obj))->base)
 
 #define to_intel_bo(x) container_of(x, struct drm_i915_gem_object, base)
@@ -1878,6 +1897,8 @@ int i915_gem_entervt_ioctl(struct drm_device *dev, void *data,
 			   struct drm_file *file_priv);
 int i915_gem_leavevt_ioctl(struct drm_device *dev, void *data,
 			   struct drm_file *file_priv);
+int i915_gem_userptr_ioctl(struct drm_device *dev,
+				void *data, struct drm_file *file);
 int i915_gem_set_tiling(struct drm_device *dev, void *data,
 			struct drm_file *file_priv);
 int i915_gem_get_tiling(struct drm_device *dev, void *data,
@@ -1978,6 +1999,15 @@ i915_gem_object_unpin_fence(struct drm_i915_gem_object *obj)
 		WARN_ON(dev_priv->fence_regs[obj->fence_reg].pin_count <= 0);
 		dev_priv->fence_regs[obj->fence_reg].pin_count--;
 	}
+}
+
+static inline bool
+i915_gem_is_userptr_object(struct drm_i915_gem_object *obj)
+{
+	const struct drm_i915_gem_object_ops *ops = obj->ops;
+	if ((ops == NULL) || (ops->is_userptr_obj == NULL))
+		return 0;
+	return ops->is_userptr_obj();
 }
 
 void i915_gem_retire_requests(struct drm_device *dev);
@@ -2188,6 +2218,9 @@ static inline bool i915_gem_object_needs_bit17_swizzle(struct drm_i915_gem_objec
 void i915_gem_detect_bit_6_swizzle(struct drm_device *dev);
 void i915_gem_object_do_bit_17_swizzle(struct drm_i915_gem_object *obj);
 void i915_gem_object_save_bit_17_swizzle(struct drm_i915_gem_object *obj);
+
+/* i915_gem_userptr.c */
+int i915_gem_userptr_obj_pageoffset(struct drm_i915_gem_object *obj);
 
 /* i915_gem_debug.c */
 #if WATCH_LISTS
