@@ -732,8 +732,10 @@ ironlake_check_encoder_dotclock(const struct intel_crtc_config *pipe_config,
 				int dotclock);
 bool intel_crtc_active(struct drm_crtc *crtc);
 void i915_disable_vga_mem(struct drm_device *dev);
-void hsw_enable_ips(struct intel_crtc *crtc);
-void hsw_disable_ips(struct intel_crtc *crtc);
+#define IPS_NO_WAIT_FOR_VBLANK 0
+#define IPS_WAIT_FOR_VBLANK 1
+void hsw_enable_ips(struct intel_crtc *crtc, int wait_for_vblank);
+void hsw_disable_ips(struct intel_crtc *crtc, int wait_for_vblank);
 void intel_display_set_init_power(struct drm_device *dev, bool enable);
 int valleyview_get_vco(struct drm_i915_private *dev_priv);
 

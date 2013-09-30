@@ -3641,7 +3641,7 @@ static void intel_disable_planes(struct drm_crtc *crtc)
 			intel_plane_disable(&intel_plane->base);
 }
 
-void hsw_enable_ips(struct intel_crtc *crtc)
+void hsw_enable_ips(struct intel_crtc *crtc, int wait_for_vblank)
 {
 	struct drm_device *dev = crtc->base.dev;
 	struct drm_i915_private *dev_priv = dev->dev_private;
@@ -3653,7 +3653,8 @@ void hsw_enable_ips(struct intel_crtc *crtc)
 		return;
 
 	/* Enabling IPS and primary plane on the same vblank leads to underruns :( */
-	intel_wait_for_vblank(dev, crtc->pipe);
+	if (IPS_WAIT_FOR_VBLANK == wait_for_vblank)
+		intel_wait_for_vblank(dev, crtc->pipe);
 
 	/* We can only enable IPS after we enable a plane and wait for a vblank.
 	 * We guarantee that the plane is enabled by calling intel_enable_ips
@@ -3682,7 +3683,7 @@ void hsw_enable_ips(struct intel_crtc *crtc)
 	}
 }
 
-void hsw_disable_ips(struct intel_crtc *crtc)
+void hsw_disable_ips(struct intel_crtc *crtc, int wait_for_vblank)
 {
 	struct drm_device *dev = crtc->base.dev;
 	struct drm_i915_private *dev_priv = dev->dev_private;
@@ -3700,7 +3701,8 @@ void hsw_disable_ips(struct intel_crtc *crtc)
 	POSTING_READ(IPS_CTL);
 
 	/* We need to wait for a vblank before we can disable the plane. */
-	intel_wait_for_vblank(dev, crtc->pipe);
+	if (IPS_WAIT_FOR_VBLANK == wait_for_vblank)
+		intel_wait_for_vblank(dev, crtc->pipe);
 }
 
 /** Loads the palette/gamma unit for the CRTC with the prepared values */
@@ -3735,7 +3737,7 @@ static void intel_crtc_load_lut(struct drm_crtc *crtc)
 	if (intel_crtc->config.ips_enabled &&
 	    ((I915_READ(GAMMA_MODE(pipe)) & GAMMA_MODE_MODE_MASK) ==
 	     GAMMA_MODE_MODE_SPLIT)) {
-		hsw_disable_ips(intel_crtc);
+		hsw_disable_ips(intel_crtc, IPS_WAIT_FOR_VBLANK);
 		reenable_ips = true;
 	}
 
@@ -3747,7 +3749,7 @@ static void intel_crtc_load_lut(struct drm_crtc *crtc)
 	}
 
 	if (reenable_ips)
-		hsw_enable_ips(intel_crtc);
+		hsw_enable_ips(intel_crtc, IPS_WAIT_FOR_VBLANK);
 }
 
 static void ironlake_crtc_enable(struct drm_crtc *crtc)
@@ -3841,7 +3843,7 @@ static void haswell_crtc_enable_planes(struct drm_crtc *crtc)
 	intel_enable_planes(crtc);
 	intel_crtc_update_cursor(crtc, true);
 
-	hsw_enable_ips(intel_crtc);
+	hsw_enable_ips(intel_crtc, IPS_WAIT_FOR_VBLANK);
 
 	mutex_lock(&dev->struct_mutex);
 	intel_update_fbc(dev);
@@ -3863,7 +3865,7 @@ static void haswell_crtc_disable_planes(struct drm_crtc *crtc)
 	if (dev_priv->fbc.plane == plane)
 		intel_disable_fbc(dev);
 
-	hsw_disable_ips(intel_crtc);
+	hsw_disable_ips(intel_crtc, IPS_WAIT_FOR_VBLANK);
 
 	intel_crtc_update_cursor(crtc, false);
 	intel_disable_planes(crtc);

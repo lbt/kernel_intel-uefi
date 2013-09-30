@@ -99,13 +99,28 @@ intel_update_primary(struct drm_crtc *crtc)
 	if (intel_crtc->primary_enabled == (tmp & DISPLAY_PLANE_ENABLE))
 		goto out;
 
-	if (!(intel_crtc->primary_enabled))
-		tmp &= ~DISPLAY_PLANE_ENABLE;
-	else
-		tmp |= DISPLAY_PLANE_ENABLE;
+	if (!(intel_crtc->primary_enabled)) {
+		if (dev_priv->fbc.plane == intel_crtc->plane)
+			intel_disable_fbc(dev);
 
-	I915_WRITE(reg, tmp);
-	intel_flush_primary_plane(dev_priv, intel_crtc->plane);
+		if (IS_HASWELL(dev))
+			hsw_disable_ips(intel_crtc, IPS_NO_WAIT_FOR_VBLANK);
+
+		tmp &= ~DISPLAY_PLANE_ENABLE;
+		I915_WRITE(reg, tmp);
+		intel_flush_primary_plane(dev_priv, intel_crtc->plane);
+	} else {
+		tmp |= DISPLAY_PLANE_ENABLE;
+		I915_WRITE(reg, tmp);
+		intel_flush_primary_plane(dev_priv, intel_crtc->plane);
+
+		if (IS_HASWELL(dev))
+			hsw_enable_ips(intel_crtc, IPS_NO_WAIT_FOR_VBLANK);
+
+		mutex_lock(&dev->struct_mutex);
+		intel_update_fbc(dev);
+		mutex_unlock(&dev->struct_mutex);
+	}
 
 out:
 	trace_i915_sprite_end(crtc);
@@ -983,14 +998,6 @@ intel_update_plane(struct drm_plane *plane, struct drm_crtc *crtc,
 	intel_plane->obj = obj;
 
 	if (intel_crtc->active) {
-		if (disable_primary) {
-			if (dev_priv->fbc.plane == intel_crtc->plane)
-				intel_disable_fbc(dev);
-
-			if (IS_HASWELL(dev))
-				hsw_disable_ips(intel_crtc);
-		}
-
 		if (visible)
 			intel_plane->update_plane(plane, crtc, fb, obj,
 						  crtc_x, crtc_y, crtc_w, crtc_h,
@@ -998,15 +1005,6 @@ intel_update_plane(struct drm_plane *plane, struct drm_crtc *crtc,
 						  disable_primary);
 		else
 			intel_plane->disable_plane(plane, crtc);
-
-		if (!disable_primary) {
-			if (IS_HASWELL(dev))
-				hsw_enable_ips(intel_crtc);
-
-			mutex_lock(&dev->struct_mutex);
-			intel_update_fbc(dev);
-			mutex_unlock(&dev->struct_mutex);
-		}
 	}
 
 	/* Unpin old obj after new one is active to avoid ugliness */
@@ -1031,16 +1029,8 @@ intel_disable_plane(struct drm_plane *plane)
 
 	intel_crtc = to_intel_crtc(plane->crtc);
 
-	if (intel_crtc->active) {
+	if (intel_crtc->active)
 		intel_plane->disable_plane(plane, plane->crtc);
-
-		if (IS_HASWELL(dev))
-			hsw_enable_ips(to_intel_crtc(plane->crtc));
-
-		mutex_lock(&dev->struct_mutex);
-		intel_update_fbc(dev);
-		mutex_unlock(&dev->struct_mutex);
-	}
 
 	mutex_lock(&dev->struct_mutex);
 	if (intel_plane->obj) {
