@@ -27,13 +27,13 @@
 
 #include <linux/i2c.h>
 #include <linux/hdmi.h>
+#include <linux/switch.h>
 #include <drm/i915_drm.h>
 #include "i915_drv.h"
 #include <drm/drm_crtc.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_fb_helper.h>
 #include <drm/drm_dp_helper.h>
-
 /**
  * _wait_for - magic (register) wait macro
  *
