@@ -32,7 +32,6 @@
 
 #include <linux/moduleparam.h>
 #include "intel_drv.h"
-#include "linux/mfd/intel_mid_pmic.h"
 
 #define PCI_LBPC 0xf4 /* legacy/combination backlight modes */
 
