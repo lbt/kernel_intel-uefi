@@ -1930,6 +1930,65 @@ static int gen6_ring_flush(struct intel_ring_buffer *ring,
 	return 0;
 }
 
+#define CLIENT_MASK      0xE0000000
+#define SUBCLIENT_MASK   0x18000000
+#define MI_CLIENT        0x00000000
+#define RC_CLIENT        0x60000000
+#define BC_CLIENT        0x40000000
+#define MEDIA_SUBCLIENT  0x10000000
+
+static unsigned int
+gen7_render_get_cmd_length_mask(unsigned int cmd_header)
+{
+	unsigned int client = cmd_header & CLIENT_MASK;
+	unsigned int subclient = cmd_header & SUBCLIENT_MASK;
+
+	if (client == MI_CLIENT)
+		return 0x3F;
+	else if (client == RC_CLIENT) {
+		if (subclient == MEDIA_SUBCLIENT)
+			return 0xFFFF;
+		else
+			return 0xFF;
+	}
+
+	DRM_DEBUG_DRIVER("CMD: Abnormal rcs cmd length! 0x%08X\n", cmd_header);
+	return 0;
+}
+
+static unsigned int
+gen7_bsd_get_cmd_length_mask(unsigned int cmd_header)
+{
+	unsigned int client = cmd_header & CLIENT_MASK;
+	unsigned int subclient = cmd_header & SUBCLIENT_MASK;
+
+	if (client == MI_CLIENT)
+		return 0x3F;
+	else if (client == RC_CLIENT) {
+		if (subclient == MEDIA_SUBCLIENT)
+			return 0xFFF;
+		else
+			return 0xFF;
+	}
+
+	DRM_DEBUG_DRIVER("CMD: Abnormal bsd cmd length! 0x%08X\n", cmd_header);
+	return 0;
+}
+
+static unsigned int
+gen7_blt_get_cmd_length_mask(unsigned int cmd_header)
+{
+	unsigned int client = cmd_header & CLIENT_MASK;
+
+	if (client == MI_CLIENT)
+		return 0x3F;
+	else if (client == BC_CLIENT)
+		return 0xFF;
+
+	DRM_DEBUG_DRIVER("CMD: Abnormal blt cmd length! 0x%08X\n", cmd_header);
+	return 0;
+}
+
 int intel_init_render_ring_buffer(struct drm_device *dev)
 {
 	drm_i915_private_t *dev_priv = dev->dev_private;
@@ -2037,6 +2096,8 @@ int intel_init_render_ring_buffer(struct drm_device *dev)
 			ring->cmd_tables = gen7_render_cmds;
 			ring->cmd_table_count = ARRAY_SIZE(gen7_render_cmds);
 		}
+
+		ring->get_cmd_length_mask = gen7_render_get_cmd_length_mask;
 	}
 
 	return intel_init_ring_buffer(dev, ring);
@@ -2173,6 +2234,7 @@ int intel_init_bsd_ring_buffer(struct drm_device *dev)
 	if (IS_GEN7(dev)) {
 		ring->cmd_tables = gen7_video_cmds;
 		ring->cmd_table_count = ARRAY_SIZE(gen7_video_cmds);
+		ring->get_cmd_length_mask = gen7_bsd_get_cmd_length_mask;
 	}
 
 	return intel_init_ring_buffer(dev, ring);
@@ -2218,6 +2280,7 @@ int intel_init_blt_ring_buffer(struct drm_device *dev)
 	if (IS_GEN7(dev)) {
 		ring->cmd_tables = gen7_blt_cmds;
 		ring->cmd_table_count = ARRAY_SIZE(gen7_blt_cmds);
+		ring->get_cmd_length_mask = gen7_blt_get_cmd_length_mask;
 	}
 
 	return intel_init_ring_buffer(dev, ring);
@@ -2264,6 +2327,8 @@ int intel_init_vebox_ring_buffer(struct drm_device *dev)
 	if (IS_HASWELL(dev)) {
 		ring->cmd_tables = hsw_vebox_cmds;
 		ring->cmd_table_count = ARRAY_SIZE(hsw_vebox_cmds);
+		/* VECS can use the same length_mask function as VCS */
+		ring->get_cmd_length_mask = gen7_bsd_get_cmd_length_mask;
 	}
 
 	return intel_init_ring_buffer(dev, ring);
