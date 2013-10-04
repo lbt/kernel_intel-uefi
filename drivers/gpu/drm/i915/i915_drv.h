@@ -1755,6 +1755,57 @@ struct drm_i915_file_private {
 
 #define INTEL_INFO(dev)	(to_i915(dev)->info)
 
+/**
+ * A command that requires special handling by the command parser.
+ */
+struct drm_i915_cmd_descriptor {
+	/**
+	 * Flags describing how the command parser processes the command.
+	 *
+	 * CMD_DESC_FIXED: The command has a fixed length if this is set,
+	 *                 a length mask if not set
+	 * CMD_DESC_SKIP: The command is allowed but does not follow the
+	 *                standard length encoding for the opcode range in
+	 *                which it falls
+	 */
+	int flags;
+#define CMD_DESC_FIXED (1 << 0)
+#define CMD_DESC_SKIP (1 << 1)
+
+	/**
+	 * The command's unique identification bits and the bitmask to get them.
+	 * This isn't strictly the opcode field as defined in the spec and may
+	 * also include type, subtype, and/or subop fields.
+	 */
+	struct {
+		unsigned int value;
+		unsigned int mask;
+	} cmd;
+
+	/**
+	 * The command's length. The command is either fixed length (i.e. does
+	 * not include a length field) or has a length field mask. The flag
+	 * CMD_DESC_FIXED indicates a fixed length. Otherwise, the command has
+	 * a length mask. All command entries in a command table must include
+	 * length information.
+	 */
+	union {
+		unsigned int fixed;
+		unsigned int mask;
+	} length;
+};
+
+/**
+ * A table of commands requiring special handling by the command parser.
+ *
+ * Each ring has an array of tables. Each table consists of an array of command
+ * descriptors, which must be sorted with command opcodes in ascending order.
+ */
+struct drm_i915_cmd_table {
+	const struct drm_i915_cmd_descriptor *table;
+	int count;
+};
+
 #define IS_I830(dev)		((dev)->pdev->device == 0x3577)
 #define IS_845G(dev)		((dev)->pdev->device == 0x2562)
 #define IS_I85X(dev)		(INTEL_INFO(dev)->is_i85x)
