@@ -31,6 +31,7 @@
 #include "i915_drv.h"
 #include <drm/i915_drm.h>
 #include "i915_trace.h"
+#include "i915_cmd_parser.h"
 #include "intel_drv.h"
 
 static inline int ring_space(struct intel_ring_buffer *ring)
@@ -2027,6 +2028,17 @@ int intel_init_render_ring_buffer(struct drm_device *dev)
 		ring->scratch.gtt_offset = i915_gem_obj_ggtt_offset(obj);
 	}
 
+	if (IS_GEN7(dev)) {
+		if (IS_HASWELL(dev)) {
+			ring->cmd_tables = hsw_render_ring_cmds;
+			ring->cmd_table_count =
+				ARRAY_SIZE(hsw_render_ring_cmds);
+		} else {
+			ring->cmd_tables = gen7_render_cmds;
+			ring->cmd_table_count = ARRAY_SIZE(gen7_render_cmds);
+		}
+	}
+
 	return intel_init_ring_buffer(dev, ring);
 }
 
@@ -2158,6 +2170,11 @@ int intel_init_bsd_ring_buffer(struct drm_device *dev)
 	}
 	ring->init = init_ring_common;
 
+	if (IS_GEN7(dev)) {
+		ring->cmd_tables = gen7_video_cmds;
+		ring->cmd_table_count = ARRAY_SIZE(gen7_video_cmds);
+	}
+
 	return intel_init_ring_buffer(dev, ring);
 }
 
@@ -2197,6 +2214,11 @@ int intel_init_blt_ring_buffer(struct drm_device *dev)
 	ring->signal_mbox[BCS] = GEN6_NOSYNC;
 	ring->signal_mbox[VECS] = GEN6_VEBSYNC;
 	ring->init = init_ring_common;
+
+	if (IS_GEN7(dev)) {
+		ring->cmd_tables = gen7_blt_cmds;
+		ring->cmd_table_count = ARRAY_SIZE(gen7_blt_cmds);
+	}
 
 	return intel_init_ring_buffer(dev, ring);
 }
@@ -2238,6 +2260,11 @@ int intel_init_vebox_ring_buffer(struct drm_device *dev)
 	ring->signal_mbox[BCS] = GEN6_BVESYNC;
 	ring->signal_mbox[VECS] = GEN6_NOSYNC;
 	ring->init = init_ring_common;
+
+	if (IS_HASWELL(dev)) {
+		ring->cmd_tables = hsw_vebox_cmds;
+		ring->cmd_table_count = ARRAY_SIZE(hsw_vebox_cmds);
+	}
 
 	return intel_init_ring_buffer(dev, ring);
 }

@@ -163,6 +163,13 @@ struct  intel_ring_buffer {
 		u32 gtt_offset;
 		volatile u32 *cpu_page;
 	} scratch;
+
+	/**
+	 * Tables of commands the command parser needs to know about
+	 * for this ring.
+	 */
+	const struct drm_i915_cmd_table *cmd_tables;
+	int cmd_table_count;
 };
 
 static inline bool
