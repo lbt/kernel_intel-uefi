@@ -74,7 +74,6 @@ static const struct drm_i915_cmd_descriptor common_cmds[] = {
 	      .reg = { .offset = 1, .mask = 0x00EFFFFC }               ),
 	CMD(  MI_LOAD_REGISTER_MEM,             SMI,   !F,  0xFF,   W,
 	      .reg = { .offset = 1, .mask = 0x00EFFFFC }               ),
-	CMD(  MI_BATCH_BUFFER_START,            SMI,   !F,  0xFF,   S  ),
 };
 
 static const struct drm_i915_cmd_descriptor render_cmds[] = {
@@ -84,6 +83,7 @@ static const struct drm_i915_cmd_descriptor render_cmds[] = {
 	CMD(  MI_PREDICATE,                     SMI,    F,  1,      S  ),
 	CMD(  MI_TOPOLOGY_FILTER,               SMI,    F,  1,      S  ),
 	CMD(  MI_CLFLUSH,                       SMI,   !F,  0x3FF,  S  ),
+	CMD(  MI_BATCH_BUFFER_START,            SMI,   !F,  0xFF,   R  ),
 	CMD(  GFX_OP_3DSTATE_VF_STATISTICS,     S3D,    F,  1,      S  ),
 	CMD(  PIPELINE_SELECT,                  S3D,    F,  1,      S  ),
 	CMD(  MEDIA_VFE_STATE,			S3D,   !F,  0xFF,   B,
@@ -128,7 +128,12 @@ static const struct drm_i915_cmd_descriptor video_cmds[] = {
 			.expected = 0
 	      }},
 	      .bits_count = 1					       ),
+	CMD(  MI_BATCH_BUFFER_START,            SMI,   !F,  0xFF,   S  ),
 	CMD(  MFX_WAIT,                         SMFX,  !F,  0x3F,   S  ),
+};
+
+static const struct drm_i915_cmd_descriptor vecs_cmds[] = {
+	CMD(  MI_BATCH_BUFFER_START,            SMI,   !F,  0xFF,   R  ),
 };
 
 static const struct drm_i915_cmd_descriptor blt_cmds[] = {
@@ -140,6 +145,7 @@ static const struct drm_i915_cmd_descriptor blt_cmds[] = {
 			.expected = 0
 	      }},
 	      .bits_count = 1					       ),
+	CMD(  MI_BATCH_BUFFER_START,            SMI,   !F,  0xFF,   R  ),
 	CMD(  COLOR_BLT,                        S2D,   !F,  0x1F,   S  ),
 	CMD(  SRC_COPY_BLT,                     S2D,   !F,  0x1F,   S  ),
 };
@@ -173,6 +179,7 @@ static const struct drm_i915_cmd_table gen7_video_cmds[] = {
 
 static struct drm_i915_cmd_table hsw_vebox_cmds[] = {
 	{ common_cmds, ARRAY_SIZE(common_cmds) },
+	{ vecs_cmds, ARRAY_SIZE(vecs_cmds) },
 };
 
 static const struct drm_i915_cmd_table gen7_blt_cmds[] = {
