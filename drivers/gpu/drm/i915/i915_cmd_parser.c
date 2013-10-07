@@ -162,6 +162,12 @@ int i915_parse_cmds(struct intel_ring_buffer *ring,
 			break;
 		}
 
+		if (desc->flags & CMD_DESC_REJECT) {
+			DRM_DEBUG_DRIVER("CMD: Rejected command: 0x%08X\n", *cmd);
+			ret = -EINVAL;
+			break;
+		}
+
 		cmd += length;
 	}
 

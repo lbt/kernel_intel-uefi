@@ -1767,10 +1767,12 @@ struct drm_i915_cmd_descriptor {
 	 * CMD_DESC_SKIP: The command is allowed but does not follow the
 	 *                standard length encoding for the opcode range in
 	 *                which it falls
+	 * CMD_DESC_REJECT: The command is never allowed
 	 */
 	int flags;
 #define CMD_DESC_FIXED (1 << 0)
 #define CMD_DESC_SKIP (1 << 1)
+#define CMD_DESC_REJECT (1 << 2)
 
 	/**
 	 * The command's unique identification bits and the bitmask to get them.
