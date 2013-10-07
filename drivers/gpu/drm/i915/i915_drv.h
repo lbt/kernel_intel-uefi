@@ -1770,12 +1770,14 @@ struct drm_i915_cmd_descriptor {
 	 * CMD_DESC_REJECT: The command is never allowed
 	 * CMD_DESC_REGISTER: The command should be checked against the
 	 *                    register whitelist for the appropriate ring
+	 * CMD_DESC_BITMASK: The command has certain bits that must be checked
 	 */
 	int flags;
 #define CMD_DESC_FIXED (1 << 0)
 #define CMD_DESC_SKIP (1 << 1)
 #define CMD_DESC_REJECT (1 << 2)
 #define CMD_DESC_REGISTER (1 << 3)
+#define CMD_DESC_BITMASK (1 << 4)
 
 	/**
 	 * The command's unique identification bits and the bitmask to get them.
@@ -1808,6 +1810,21 @@ struct drm_i915_cmd_descriptor {
 		unsigned int offset;
 		unsigned int mask;
 	} reg;
+
+#define MAX_CMD_DESC_BITMASKS 3
+	/**
+	 * Describes command checks where a particular dword is masked and
+	 * compared against an expected value. If the command does not match
+	 * the expected value, the parser rejects it. Only valid if flags has
+	 * the CMD_DESC_BITMASK bit set.
+	 */
+	struct {
+		unsigned int offset;
+		unsigned int mask;
+		unsigned int expected;
+	} bits[MAX_CMD_DESC_BITMASKS];
+	/** Number of valid entries in the bits array */
+	int bits_count;
 };
 
 /**

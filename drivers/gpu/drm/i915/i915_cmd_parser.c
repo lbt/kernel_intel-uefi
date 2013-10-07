@@ -195,6 +195,26 @@ int i915_parse_cmds(struct intel_ring_buffer *ring,
 			}
 		}
 
+		if (desc->flags & CMD_DESC_BITMASK) {
+			int i;
+
+			for (i = 0; i < desc->bits_count; i++) {
+				unsigned int dword =
+					cmd[desc->bits[i].offset] &
+					desc->bits[i].mask;
+
+				if (dword != desc->bits[i].expected) {
+					DRM_DEBUG_DRIVER("CMD: Rejected command 0x%08X for bitmask 0x%08X (exp=0x%08X act=0x%08X) (ring=%d)\n",
+							 *cmd, desc->bits[i].mask, desc->bits[i].expected, dword, ring->id);
+					ret = -EINVAL;
+					break;
+				}
+			}
+
+			if (ret)
+				break;
+		}
+
 		cmd += length;
 	}
 
