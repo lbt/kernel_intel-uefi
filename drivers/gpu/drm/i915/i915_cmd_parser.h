@@ -52,6 +52,7 @@
 #define F CMD_DESC_FIXED
 #define S CMD_DESC_SKIP
 #define R CMD_DESC_REJECT
+#define W CMD_DESC_REGISTER
 
 /*            Command                          Mask   Fixed Len   Action
 	      ---------------------------------------------------------- */
@@ -65,10 +66,13 @@ static const struct drm_i915_cmd_descriptor common_cmds[] = {
 	CMD(  MI_SEMAPHORE_MBOX,                SMI,   !F,  0xFF,   R  ),
 	CMD(  MI_STORE_DWORD_IMM,               SMI,   !F,  0x1FF,  S  ),
 	CMD(  MI_STORE_DWORD_INDEX,             SMI,   !F,  0xFF,   R  ),
-	CMD(  MI_LOAD_REGISTER_IMM(1),          SMI,   !F,  0xFF,   S  ),
+	CMD(  MI_LOAD_REGISTER_IMM(1),          SMI,   !F,  0xFF,   W,
+	      .reg = { .offset = 1, .mask = 0x00EFFFFC }               ),
 	CMD(  MI_UPDATE_GTT,                    SMI,   !F,  0xFF,   R  ),
-	CMD(  MI_STORE_REGISTER_MEM(1),		SMI,   !F,  0xFF,   S  ),
-	CMD(  MI_LOAD_REGISTER_MEM,             SMI,   !F,  0xFF,   S  ),
+	CMD(  MI_STORE_REGISTER_MEM(1),		SMI,   !F,  0xFF,   W,
+	      .reg = { .offset = 1, .mask = 0x00EFFFFC }               ),
+	CMD(  MI_LOAD_REGISTER_MEM,             SMI,   !F,  0xFF,   W,
+	      .reg = { .offset = 1, .mask = 0x00EFFFFC }               ),
 	CMD(  MI_BATCH_BUFFER_START,            SMI,   !F,  0xFF,   S  ),
 };
 
@@ -92,7 +96,8 @@ static struct drm_i915_cmd_descriptor hsw_render_cmds[] = {
 	CMD(  MI_URB_ATOMIC_ALLOC,              SMI,    F,  1,      S  ),
 	CMD(  MI_RS_CONTEXT,                    SMI,    F,  1,      S  ),
 	CMD(  MI_MATH,                          SMI,   !F,  0x3F,   S  ),
-	CMD(  MI_LOAD_REGISTER_REG,             SMI,    F,  3,      S  ),
+	CMD(  MI_LOAD_REGISTER_REG,             SMI,    F,  3,      W,
+	      .reg = { .offset = 1, .mask = 0x00EFFFFC }               ),
 	CMD(  MI_LOAD_URB_MEM,                  SMI,   !F,  0xFF,   S  ),
 	CMD(  MI_STORE_URB_MEM,                 SMI,   !F,  0xFF,   S  ),
 	CMD(  GFX_OP_3DSTATE_DX9_CONSTANTF_VS,  S3D,   !F,  0x7FF,  S  ),
@@ -118,6 +123,7 @@ static const struct drm_i915_cmd_descriptor blt_cmds[] = {
 #undef F
 #undef S
 #undef R
+#undef W
 
 static const struct drm_i915_cmd_table gen7_render_cmds[] = {
 	{ common_cmds, ARRAY_SIZE(common_cmds) },
