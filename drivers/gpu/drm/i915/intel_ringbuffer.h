@@ -172,6 +172,12 @@ struct  intel_ring_buffer {
 	int cmd_table_count;
 
 	/**
+	 * Table of registers allowed in commands that read/write registers.
+	 */
+	const unsigned int *reg_table;
+	int reg_count;
+
+	/**
 	 * Returns the bitmask for the length field of the specified command.
 	 * Return 0 for an unrecognized/invalid command.
 	 *

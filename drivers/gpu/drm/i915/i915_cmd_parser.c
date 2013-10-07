@@ -73,6 +73,20 @@ find_cmd(struct intel_ring_buffer *ring, unsigned int cmd_header)
 	return &default_desc;
 }
 
+static int valid_reg(const unsigned int *table, int count, unsigned int addr)
+{
+	if (table && count != 0) {
+		int i;
+
+		for (i = 0; i < count; i++) {
+			if (table[i] == addr)
+				return 1;
+		}
+	}
+
+	return 0;
+}
+
 /* TODO: merge with vmap code for batch copy */
 static unsigned int *vmap_batch(struct drm_i915_gem_object *obj)
 {
@@ -166,6 +180,19 @@ int i915_parse_cmds(struct intel_ring_buffer *ring,
 			DRM_DEBUG_DRIVER("CMD: Rejected command: 0x%08X\n", *cmd);
 			ret = -EINVAL;
 			break;
+		}
+
+		if (desc->flags & CMD_DESC_REGISTER) {
+			unsigned int reg_addr =
+				cmd[desc->reg.offset] & desc->reg.mask;
+
+			if (!valid_reg(ring->reg_table,
+				       ring->reg_count, reg_addr)) {
+				DRM_DEBUG_DRIVER("CMD: Rejected register 0x%08X in command: 0x%08X (ring=%d)\n",
+						 reg_addr, *cmd, ring->id);
+				ret = -EINVAL;
+				break;
+			}
 		}
 
 		cmd += length;

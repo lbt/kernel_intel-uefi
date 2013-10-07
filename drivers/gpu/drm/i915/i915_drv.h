@@ -1768,11 +1768,14 @@ struct drm_i915_cmd_descriptor {
 	 *                standard length encoding for the opcode range in
 	 *                which it falls
 	 * CMD_DESC_REJECT: The command is never allowed
+	 * CMD_DESC_REGISTER: The command should be checked against the
+	 *                    register whitelist for the appropriate ring
 	 */
 	int flags;
 #define CMD_DESC_FIXED (1 << 0)
 #define CMD_DESC_SKIP (1 << 1)
 #define CMD_DESC_REJECT (1 << 2)
+#define CMD_DESC_REGISTER (1 << 3)
 
 	/**
 	 * The command's unique identification bits and the bitmask to get them.
@@ -1795,6 +1798,16 @@ struct drm_i915_cmd_descriptor {
 		unsigned int fixed;
 		unsigned int mask;
 	} length;
+
+	/**
+	 * Describes where to find a register address in the command to check
+	 * against the ring's register whitelist. Only valid if flags has the
+	 * CMD_DESC_REGISTER bit set.
+	 */
+	struct {
+		unsigned int offset;
+		unsigned int mask;
+	} reg;
 };
 
 /**
