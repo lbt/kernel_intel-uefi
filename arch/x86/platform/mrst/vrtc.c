@@ -79,7 +79,7 @@ unsigned long vrtc_get_time(void)
 	/* vRTC YEAR reg contains the offset to 1972 */
 	year += 1972;
 
-	printk(KERN_INFO "vRTC: sec: %d min: %d hour: %d day: %d "
+	pr_info("vRTC: sec: %d min: %d hour: %d day: %d "
 		"mon: %d year: %d\n", sec, min, hour, mday, mon, year);
 
 	return mktime(year, mon, mday, hour, min, sec);
@@ -108,8 +108,7 @@ int vrtc_set_mmss(unsigned long nowtime)
 		vrtc_cmos_write(tm.tm_sec, RTC_SECONDS);
 		spin_unlock_irqrestore(&rtc_lock, flags);
 	} else {
-		printk(KERN_ERR
-		       "%s: Invalid vRTC value: write of %lx to vRTC failed\n",
+		pr_err("%s: Invalid vRTC value: write of %lx to vRTC failed\n",
 			__FUNCTION__, nowtime);
 		retval = -EINVAL;
 	}
