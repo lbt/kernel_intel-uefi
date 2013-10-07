@@ -51,6 +51,7 @@
 #define SMFX STD_MFX_OPCODE_MASK
 #define F CMD_DESC_FIXED
 #define S CMD_DESC_SKIP
+#define R CMD_DESC_REJECT
 
 /*            Command                          Mask   Fixed Len   Action
 	      ---------------------------------------------------------- */
@@ -61,10 +62,11 @@ static const struct drm_i915_cmd_descriptor common_cmds[] = {
 	CMD(  MI_ARB_CHECK,                     SMI,    F,  1,      S  ),
 	CMD(  MI_REPORT_HEAD,                   SMI,    F,  1,      S  ),
 	CMD(  MI_SUSPEND_FLUSH,                 SMI,    F,  1,      S  ),
-	CMD(  MI_SEMAPHORE_MBOX,                SMI,   !F,  0xFF,   S  ),
+	CMD(  MI_SEMAPHORE_MBOX,                SMI,   !F,  0xFF,   R  ),
 	CMD(  MI_STORE_DWORD_IMM,               SMI,   !F,  0x1FF,  S  ),
-	CMD(  MI_STORE_DWORD_INDEX,             SMI,   !F,  0xFF,   S  ),
+	CMD(  MI_STORE_DWORD_INDEX,             SMI,   !F,  0xFF,   R  ),
 	CMD(  MI_LOAD_REGISTER_IMM(1),          SMI,   !F,  0xFF,   S  ),
+	CMD(  MI_UPDATE_GTT,                    SMI,   !F,  0xFF,   R  ),
 	CMD(  MI_STORE_REGISTER_MEM(1),		SMI,   !F,  0xFF,   S  ),
 	CMD(  MI_LOAD_REGISTER_MEM,             SMI,   !F,  0xFF,   S  ),
 	CMD(  MI_BATCH_BUFFER_START,            SMI,   !F,  0xFF,   S  ),
@@ -72,8 +74,8 @@ static const struct drm_i915_cmd_descriptor common_cmds[] = {
 
 static const struct drm_i915_cmd_descriptor render_cmds[] = {
 	CMD(  MI_FLUSH,                         SMI,    F,  1,      S  ),
-	CMD(  MI_ARB_ON_OFF,                    SMI,    F,  1,      S  ),
-	CMD(  MI_DISPLAY_FLIP,                  SMI,   !F,  0xFF,   S  ),
+	CMD(  MI_ARB_ON_OFF,                    SMI,    F,  1,      R  ),
+	CMD(  MI_DISPLAY_FLIP,                  SMI,   !F,  0xFF,   R  ),
 	CMD(  MI_PREDICATE,                     SMI,    F,  1,      S  ),
 	CMD(  MI_TOPOLOGY_FILTER,               SMI,    F,  1,      S  ),
 	CMD(  MI_CLFLUSH,                       SMI,   !F,  0x3FF,  S  ),
@@ -98,12 +100,12 @@ static struct drm_i915_cmd_descriptor hsw_render_cmds[] = {
 };
 
 static const struct drm_i915_cmd_descriptor video_cmds[] = {
-	CMD(  MI_ARB_ON_OFF,                    SMI,    F,  1,      S  ),
+	CMD(  MI_ARB_ON_OFF,                    SMI,    F,  1,      R  ),
 	CMD(  MFX_WAIT,                         SMFX,  !F,  0x3F,   S  ),
 };
 
 static const struct drm_i915_cmd_descriptor blt_cmds[] = {
-	CMD(  MI_DISPLAY_FLIP,                  SMI,   !F,  0xFF,   S  ),
+	CMD(  MI_DISPLAY_FLIP,                  SMI,   !F,  0xFF,   R  ),
 	CMD(  COLOR_BLT,                        S2D,   !F,  0x1F,   S  ),
 	CMD(  SRC_COPY_BLT,                     S2D,   !F,  0x1F,   S  ),
 };
@@ -115,6 +117,7 @@ static const struct drm_i915_cmd_descriptor blt_cmds[] = {
 #undef SMFX
 #undef F
 #undef S
+#undef R
 
 static const struct drm_i915_cmd_table gen7_render_cmds[] = {
 	{ common_cmds, ARRAY_SIZE(common_cmds) },
