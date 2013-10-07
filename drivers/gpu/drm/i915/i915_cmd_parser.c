@@ -57,10 +57,21 @@ find_cmd(struct intel_ring_buffer *ring, unsigned int cmd_header)
 	unsigned int mask;
 	int i;
 
+	drm_i915_private_t *dev_priv = ring->dev->dev_private;
+
 	for (i = 0; i < ring->cmd_table_count; i++) {
 		const struct drm_i915_cmd_descriptor *desc;
 
 		desc = find_cmd_in_table(&ring->cmd_tables[i], cmd_header);
+		if (desc)
+			return desc;
+	}
+
+	if (dev_priv->append_cmd_table[ring->id]) {
+		const struct drm_i915_cmd_descriptor *desc;
+
+		desc = find_cmd_in_table(dev_priv->append_cmd_table[ring->id],
+					 cmd_header);
 		if (desc)
 			return desc;
 	}
@@ -189,10 +200,22 @@ int i915_parse_cmds(struct intel_ring_buffer *ring,
 
 			if (!valid_reg(ring->reg_table,
 				       ring->reg_count, reg_addr)) {
-				DRM_DEBUG_DRIVER("CMD: Rejected register 0x%08X in command: 0x%08X (ring=%d)\n",
-						 reg_addr, *cmd, ring->id);
-				ret = -EINVAL;
-				break;
+				drm_i915_private_t *dev_priv =
+					ring->dev->dev_private;
+				unsigned int *append_table =
+					dev_priv->append_reg[ring->id].table;
+				int append_count =
+					dev_priv->append_reg[ring->id].count;
+
+				if (!append_table ||
+				    !valid_reg(append_table,
+					       append_count,
+					       reg_addr)) {
+					DRM_DEBUG_DRIVER("CMD: Rejected register 0x%08X in command: 0x%08X (ring=%d)\n",
+							 reg_addr, *cmd, ring->id);
+					ret = -EINVAL;
+					break;
+				}
 			}
 		}
 
