@@ -53,6 +53,7 @@
 #define S CMD_DESC_SKIP
 #define R CMD_DESC_REJECT
 #define W CMD_DESC_REGISTER
+#define B CMD_DESC_BITMASK
 
 /*            Command                          Mask   Fixed Len   Action
 	      ---------------------------------------------------------- */
@@ -85,9 +86,23 @@ static const struct drm_i915_cmd_descriptor render_cmds[] = {
 	CMD(  MI_CLFLUSH,                       SMI,   !F,  0x3FF,  S  ),
 	CMD(  GFX_OP_3DSTATE_VF_STATISTICS,     S3D,    F,  1,      S  ),
 	CMD(  PIPELINE_SELECT,                  S3D,    F,  1,      S  ),
+	CMD(  MEDIA_VFE_STATE,			S3D,   !F,  0xFF,   B,
+	      .bits = {{
+			.offset = 2,
+			.mask = MEDIA_VFE_STATE_MMIO_ACCESS_MASK,
+			.expected = 0
+	      }},
+	      .bits_count = 1					       ),
 	CMD(  GPGPU_OBJECT,                     S3D,   !F,  0xFF,   S  ),
 	CMD(  GPGPU_WALKER,                     S3D,   !F,  0xFF,   S  ),
 	CMD(  GFX_OP_3DSTATE_SO_DECL_LIST,      S3D,   !F,  0x1FF,  S  ),
+	CMD(  GFX_OP_PIPE_CONTROL(5),           S3D,   !F,  0xFF,   B,
+	      .bits = {{
+			.offset = 1,
+			.mask = (PIPE_CONTROL_MMIO_WRITE | PIPE_CONTROL_NOTIFY),
+			.expected = 0
+	      }},
+	      .bits_count = 1					       ),
 };
 
 static struct drm_i915_cmd_descriptor hsw_render_cmds[] = {
@@ -106,11 +121,25 @@ static struct drm_i915_cmd_descriptor hsw_render_cmds[] = {
 
 static const struct drm_i915_cmd_descriptor video_cmds[] = {
 	CMD(  MI_ARB_ON_OFF,                    SMI,    F,  1,      R  ),
+	CMD(  MI_FLUSH_DW,                      SMI,   !F,  0x1F,   B,
+	      .bits = {{
+			.offset = 0,
+			.mask = MI_FLUSH_DW_NOTIFY,
+			.expected = 0
+	      }},
+	      .bits_count = 1					       ),
 	CMD(  MFX_WAIT,                         SMFX,  !F,  0x3F,   S  ),
 };
 
 static const struct drm_i915_cmd_descriptor blt_cmds[] = {
 	CMD(  MI_DISPLAY_FLIP,                  SMI,   !F,  0xFF,   R  ),
+	CMD(  MI_FLUSH_DW,                      SMI,   !F,  0x1F,   B,
+	      .bits = {{
+			.offset = 0,
+			.mask = MI_FLUSH_DW_NOTIFY,
+			.expected = 0
+	      }},
+	      .bits_count = 1					       ),
 	CMD(  COLOR_BLT,                        S2D,   !F,  0x1F,   S  ),
 	CMD(  SRC_COPY_BLT,                     S2D,   !F,  0x1F,   S  ),
 };
@@ -124,6 +153,7 @@ static const struct drm_i915_cmd_descriptor blt_cmds[] = {
 #undef S
 #undef R
 #undef W
+#undef B
 
 static const struct drm_i915_cmd_table gen7_render_cmds[] = {
 	{ common_cmds, ARRAY_SIZE(common_cmds) },
