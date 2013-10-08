@@ -1798,6 +1798,8 @@ int i915_driver_unload(struct drm_device *dev)
 	if (dev_priv->slab)
 		kmem_cache_destroy(dev_priv->slab);
 
+	i915_cmd_parser_cleanup(dev_priv);
+
 	pci_dev_put(dev_priv->bridge_dev);
 	kfree(dev->dev_private);
 
@@ -1916,6 +1918,8 @@ const struct drm_ioctl_desc i915_ioctls[] = {
 	DRM_IOCTL_DEF_DRV(I915_GEM_ACCESS_USERDATA, i915_gem_access_userdata,
 							DRM_UNLOCKED|DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(I915_SET_CSC, intel_configure_csc, DRM_UNLOCKED|DRM_RENDER_ALLOW),
+	DRM_IOCTL_DEF_DRV(I915_CMD_PARSER_APPEND, i915_cmd_parser_append_ioctl,
+			  DRM_UNLOCKED|DRM_ROOT_ONLY),
 };
 
 int i915_max_ioctl = DRM_ARRAY_SIZE(i915_ioctls);

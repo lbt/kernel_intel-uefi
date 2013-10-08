@@ -1524,6 +1524,13 @@ typedef struct drm_i915_private {
 
 	struct i915_package_c8 pc8;
 
+	/* Command parser */
+	struct drm_i915_cmd_table *append_cmd_table[I915_NUM_RINGS];
+	struct {
+		unsigned int *table;
+		int count;
+	} append_reg[I915_NUM_RINGS];
+
 	/* Old dri1 support infrastructure, beware the dragons ya fools entering
 	 * here! */
 	struct i915_dri1_state dri1;
@@ -1755,77 +1762,7 @@ struct drm_i915_file_private {
 
 #define INTEL_INFO(dev)	(to_i915(dev)->info)
 
-/**
- * A command that requires special handling by the command parser.
- */
-struct drm_i915_cmd_descriptor {
-	/**
-	 * Flags describing how the command parser processes the command.
-	 *
-	 * CMD_DESC_FIXED: The command has a fixed length if this is set,
-	 *                 a length mask if not set
-	 * CMD_DESC_SKIP: The command is allowed but does not follow the
-	 *                standard length encoding for the opcode range in
-	 *                which it falls
-	 * CMD_DESC_REJECT: The command is never allowed
-	 * CMD_DESC_REGISTER: The command should be checked against the
-	 *                    register whitelist for the appropriate ring
-	 * CMD_DESC_BITMASK: The command has certain bits that must be checked
-	 */
-	int flags;
-#define CMD_DESC_FIXED (1 << 0)
-#define CMD_DESC_SKIP (1 << 1)
-#define CMD_DESC_REJECT (1 << 2)
-#define CMD_DESC_REGISTER (1 << 3)
-#define CMD_DESC_BITMASK (1 << 4)
-
-	/**
-	 * The command's unique identification bits and the bitmask to get them.
-	 * This isn't strictly the opcode field as defined in the spec and may
-	 * also include type, subtype, and/or subop fields.
-	 */
-	struct {
-		unsigned int value;
-		unsigned int mask;
-	} cmd;
-
-	/**
-	 * The command's length. The command is either fixed length (i.e. does
-	 * not include a length field) or has a length field mask. The flag
-	 * CMD_DESC_FIXED indicates a fixed length. Otherwise, the command has
-	 * a length mask. All command entries in a command table must include
-	 * length information.
-	 */
-	union {
-		unsigned int fixed;
-		unsigned int mask;
-	} length;
-
-	/**
-	 * Describes where to find a register address in the command to check
-	 * against the ring's register whitelist. Only valid if flags has the
-	 * CMD_DESC_REGISTER bit set.
-	 */
-	struct {
-		unsigned int offset;
-		unsigned int mask;
-	} reg;
-
-#define MAX_CMD_DESC_BITMASKS 3
-	/**
-	 * Describes command checks where a particular dword is masked and
-	 * compared against an expected value. If the command does not match
-	 * the expected value, the parser rejects it. Only valid if flags has
-	 * the CMD_DESC_BITMASK bit set.
-	 */
-	struct {
-		unsigned int offset;
-		unsigned int mask;
-		unsigned int expected;
-	} bits[MAX_CMD_DESC_BITMASKS];
-	/** Number of valid entries in the bits array */
-	int bits_count;
-};
+struct drm_i915_cmd_descriptor;
 
 /**
  * A table of commands requiring special handling by the command parser.
@@ -2402,6 +2339,9 @@ int i915_verify_lists(struct drm_device *dev);
 int i915_parse_cmds(struct intel_ring_buffer *ring,
 		    struct drm_i915_gem_object *batch_obj,
 		    u32 batch_start_offset);
+int i915_cmd_parser_append_ioctl(struct drm_device *dev, void *data,
+				 struct drm_file *file_priv);
+void i915_cmd_parser_cleanup(drm_i915_private_t *dev_priv);
 
 /* i915_debugfs.c */
 int i915_debugfs_init(struct drm_minor *minor);
