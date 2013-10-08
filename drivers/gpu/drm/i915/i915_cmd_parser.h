@@ -177,6 +177,20 @@ static const struct drm_i915_cmd_descriptor video_cmds[] = {
 };
 
 static const struct drm_i915_cmd_descriptor vecs_cmds[] = {
+	CMD(  MI_FLUSH_DW,                      SMI,   !F,  0x1F,   B,
+	      .bits = {{
+			.offset = 0,
+			.mask = MI_FLUSH_DW_NOTIFY,
+			.expected = 0
+	      },
+	      {
+			.offset = 1,
+			.mask = MI_FLUSH_DW_USE_GTT,
+			.expected = 0,
+			.condition_offset = 0,
+			.condition_mask = MI_FLUSH_DW_OP_MASK
+	      }},
+	      .bits_count = 2					       ),
 	CMD(  MI_BATCH_BUFFER_START,            SMI,   !F,  0xFF,   R  ),
 };
 
