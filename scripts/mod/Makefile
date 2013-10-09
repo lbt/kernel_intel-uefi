@@ -38,6 +38,7 @@ $(obj)/$(devicetable-offsets-file): scripts/mod/devicetable-offsets.s
 	$(call cmd,offsets)
 
 targets += $(devicetable-offsets-file)
+targets += devicetable-offsets.s
 
 # dependencies on generated files need to be listed explicitly
 
