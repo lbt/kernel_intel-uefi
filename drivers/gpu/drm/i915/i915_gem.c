@@ -4969,13 +4969,13 @@ i915_gem_obj_lookup_or_create_vma(struct drm_i915_gem_object *obj,
 }
 
 /**
-* Reads/writes datatype for the object.
+* Reads/writes userdata for the object.
 */
 int
-i915_gem_access_datatype(struct drm_device *dev, void *data,
+i915_gem_access_userdata(struct drm_device *dev, void *data,
 		struct drm_file *file)
 {
-	struct drm_i915_gem_access_datatype *args = data;
+	struct drm_i915_gem_access_userdata *args = data;
 	struct drm_i915_gem_object *obj;
 
 	obj = to_intel_bo(drm_gem_object_lookup(dev, file, args->handle));
@@ -4985,9 +4985,9 @@ i915_gem_access_datatype(struct drm_device *dev, void *data,
 	mutex_lock(&dev->struct_mutex);
 
 	if (args->write)
-		obj->datatype = args->datatype;
+		obj->userdata = args->userdata;
 	else
-		args->datatype = obj->datatype;
+		args->userdata = obj->userdata;
 
 	drm_gem_object_unreference(&obj->base);
 	mutex_unlock(&dev->struct_mutex);

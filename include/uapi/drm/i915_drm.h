@@ -262,7 +262,7 @@ typedef struct _drm_i915_sarea {
 #define DRM_I915_GET_PSR_SUPPORT	0X3a
 #define DRM_I915_SET_PLANE_ALPHA	0x3d
 #define DRM_I915_DPST_CONTEXT		0x3c
-#define DRM_I915_GEM_ACCESS_DATATYPE	0x3e
+#define DRM_I915_GEM_ACCESS_USERDATA	0x3e
 
 #define DRM_IOCTL_I915_INIT		DRM_IOW( DRM_COMMAND_BASE + DRM_I915_INIT, drm_i915_init_t)
 #define DRM_IOCTL_I915_FLUSH		DRM_IO ( DRM_COMMAND_BASE + DRM_I915_FLUSH)
@@ -338,9 +338,9 @@ typedef struct _drm_i915_sarea {
 #define DRM_IOCTL_I915_SET_PLANE_180_ROTATION  \
 		DRM_IOW(DRM_COMMAND_BASE + DRM_I915_SET_PLANE_180_ROTATION, \
 		struct drm_i915_plane_180_rotation)
-#define DRM_IOCTL_I915_GEM_ACCESS_DATATYPE  \
-		DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_GEM_ACCESS_DATATYPE, \
-		struct drm_i915_gem_access_datatype)
+#define DRM_IOCTL_I915_GEM_ACCESS_USERDATA  \
+		DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_GEM_ACCESS_USERDATA, \
+		struct drm_i915_gem_access_userdata)
 #define DRM_IOCTL_I915_DPST_CONTEXT  \
 		DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_DPST_CONTEXT, \
 		struct dpst_initialize_context)
@@ -955,17 +955,17 @@ struct drm_i915_gem_get_tiling {
 	__u32 swizzle_mode;
 };
 
-struct drm_i915_gem_access_datatype {
-	 /** Handle of the buffer whose datatype will be accessed */
+struct drm_i915_gem_access_userdata {
+	 /** Handle of the buffer whose userdata will be accessed */
 	 __u32 handle;
 
 	 /**
-	 * Datatype: This quantity is user defined
+	 * Userdata: This quantity is user defined
 	 */
-	 __u32 datatype;
+	 __u32 userdata;
 
 	 /**
-	 * Write: 0=read datatype, 1=write datatype
+	 * Write: 0=read userdata, 1=write userdata
 	 */
 	 __u32 write;
 };

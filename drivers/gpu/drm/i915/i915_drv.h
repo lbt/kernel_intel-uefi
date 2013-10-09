@@ -1640,8 +1640,8 @@ struct drm_i915_gem_object {
 	/** for phy allocated objects */
 	struct drm_i915_gem_phys_object *phys_obj;
 
-	/** Object datatype */
-	uint32_t datatype;
+	/** Object userdata */
+	uint32_t userdata;
 };
 
 struct i915_gem_userptr_object {
@@ -2132,7 +2132,7 @@ void i915_gem_detach_phys_object(struct drm_device *dev,
 				 struct drm_i915_gem_object *obj);
 void i915_gem_free_all_phys_object(struct drm_device *dev);
 void i915_gem_release(struct drm_device *dev, struct drm_file *file);
-int i915_gem_access_datatype(struct drm_device *dev, void *data,
+int i915_gem_access_userdata(struct drm_device *dev, void *data,
 				struct drm_file *file);
 uint32_t
 i915_gem_get_gtt_size(struct drm_device *dev, uint32_t size, int tiling_mode);
