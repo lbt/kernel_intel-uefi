@@ -379,6 +379,9 @@ struct intel_crtc {
 		/* watermarks currently being used  */
 		struct intel_pipe_wm active;
 	} wm;
+
+	/* Flag to schedule the sprite disable to corresponding flip */
+	bool disable_sprite;
 };
 
 struct intel_plane_wm_parameters {

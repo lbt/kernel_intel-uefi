@@ -351,9 +351,9 @@ ivb_disable_plane(struct drm_plane *plane, struct drm_crtc *crtc)
 	/* Can't leave the scaler enabled... */
 	if (intel_plane->can_scale)
 		I915_WRITE(SPRSCALE(pipe), 0);
-	/* Activate double buffered register update */
-	I915_MODIFY_DISPBASE(SPRSURF(pipe), 0);
-	POSTING_READ(SPRSURF(pipe));
+
+	/* Scheduling the sprite disable to corresponding flip */
+	to_intel_crtc(crtc)->disable_sprite = true;
 
 	dev_priv->sprite_scaling_enabled &= ~(1 << pipe);
 
