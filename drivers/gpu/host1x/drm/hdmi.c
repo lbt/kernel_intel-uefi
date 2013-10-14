@@ -8,21 +8,14 @@
  */
 
 #include <linux/clk.h>
-#include <linux/debugfs.h>
-#include <linux/gpio.h>
-#include <linux/hdmi.h>
-#include <linux/module.h>
-#include <linux/of.h>
-#include <linux/platform_device.h>
-#include <linux/regulator/consumer.h>
 #include <linux/clk/tegra.h>
-
-#include <drm/drm_edid.h>
+#include <linux/debugfs.h>
+#include <linux/hdmi.h>
+#include <linux/regulator/consumer.h>
 
 #include "hdmi.h"
 #include "drm.h"
 #include "dc.h"
-#include "host1x_client.h"
 
 struct tegra_hdmi {
 	struct host1x_client client;
@@ -888,6 +881,11 @@ static int tegra_hdmi_show_regs(struct seq_file *s, void *data)
 {
 	struct drm_info_node *node = s->private;
 	struct tegra_hdmi *hdmi = node->info_ent->data;
+	int err;
+
+	err = clk_enable(hdmi->clk);
+	if (err)
+		return err;
 
 #define DUMP_REG(name)						\
 	seq_printf(s, "%-56s %#05x %08lx\n", #name, name,	\
@@ -1053,6 +1051,8 @@ static int tegra_hdmi_show_regs(struct seq_file *s, void *data)
 
 #undef DUMP_REG
 
+	clk_disable(hdmi->clk);
+
 	return 0;
 }
 
@@ -1115,9 +1115,9 @@ static int tegra_hdmi_debugfs_exit(struct tegra_hdmi *hdmi)
 	return 0;
 }
 
-static int tegra_hdmi_drm_init(struct host1x_client *client,
-			       struct drm_device *drm)
+static int tegra_hdmi_init(struct host1x_client *client)
 {
+	struct tegra_drm *tegra = dev_get_drvdata(client->parent);
 	struct tegra_hdmi *hdmi = host1x_client_to_hdmi(client);
 	int err;
 
@@ -1125,14 +1125,14 @@ static int tegra_hdmi_drm_init(struct host1x_client *client,
 	hdmi->output.dev = client->dev;
 	hdmi->output.ops = &hdmi_ops;
 
-	err = tegra_output_init(drm, &hdmi->output);
+	err = tegra_output_init(tegra->drm, &hdmi->output);
 	if (err < 0) {
 		dev_err(client->dev, "output setup failed: %d\n", err);
 		return err;
 	}
 
 	if (IS_ENABLED(CONFIG_DEBUG_FS)) {
-		err = tegra_hdmi_debugfs_init(hdmi, drm->primary);
+		err = tegra_hdmi_debugfs_init(hdmi, tegra->drm->primary);
 		if (err < 0)
 			dev_err(client->dev, "debugfs setup failed: %d\n", err);
 	}
@@ -1140,7 +1140,7 @@ static int tegra_hdmi_drm_init(struct host1x_client *client,
 	return 0;
 }
 
-static int tegra_hdmi_drm_exit(struct host1x_client *client)
+static int tegra_hdmi_exit(struct host1x_client *client)
 {
 	struct tegra_hdmi *hdmi = host1x_client_to_hdmi(client);
 	int err;
@@ -1168,13 +1168,12 @@ static int tegra_hdmi_drm_exit(struct host1x_client *client)
 }
 
 static const struct host1x_client_ops hdmi_client_ops = {
-	.drm_init = tegra_hdmi_drm_init,
-	.drm_exit = tegra_hdmi_drm_exit,
+	.init = tegra_hdmi_init,
+	.exit = tegra_hdmi_exit,
 };
 
 static int tegra_hdmi_probe(struct platform_device *pdev)
 {
-	struct host1x_drm *host1x = host1x_get_drm_data(pdev->dev.parent);
 	struct tegra_hdmi *hdmi;
 	struct resource *regs;
 	int err;
@@ -1245,11 +1244,11 @@ static int tegra_hdmi_probe(struct platform_device *pdev)
 
 	hdmi->irq = err;
 
-	hdmi->client.ops = &hdmi_client_ops;
 	INIT_LIST_HEAD(&hdmi->client.list);
+	hdmi->client.ops = &hdmi_client_ops;
 	hdmi->client.dev = &pdev->dev;
 
-	err = host1x_register_client(host1x, &hdmi->client);
+	err = host1x_client_register(&hdmi->client);
 	if (err < 0) {
 		dev_err(&pdev->dev, "failed to register host1x client: %d\n",
 			err);
@@ -1263,11 +1262,10 @@ static int tegra_hdmi_probe(struct platform_device *pdev)
 
 static int tegra_hdmi_remove(struct platform_device *pdev)
 {
-	struct host1x_drm *host1x = host1x_get_drm_data(pdev->dev.parent);
 	struct tegra_hdmi *hdmi = platform_get_drvdata(pdev);
 	int err;
 
-	err = host1x_unregister_client(host1x, &hdmi->client);
+	err = host1x_client_unregister(&hdmi->client);
 	if (err < 0) {
 		dev_err(&pdev->dev, "failed to unregister host1x client: %d\n",
 			err);

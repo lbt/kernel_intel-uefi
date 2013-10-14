@@ -7,21 +7,10 @@
  * published by the Free Software Foundation.
  */
 
-#include <linux/module.h>
-#include <linux/of_address.h>
-#include <linux/of_platform.h>
+#include <linux/host1x.h>
 
-#include <linux/dma-mapping.h>
-#include <asm/dma-iommu.h>
-
-#include <drm/drm.h>
-#include <drm/drmP.h>
-
-#include "host1x_client.h"
-#include "dev.h"
 #include "drm.h"
 #include "gem.h"
-#include "syncpt.h"
 
 #define DRIVER_NAME "tegra"
 #define DRIVER_DESC "NVIDIA Tegra graphics"
@@ -30,232 +19,29 @@
 #define DRIVER_MINOR 0
 #define DRIVER_PATCHLEVEL 0
 
-struct host1x_drm_client {
-	struct host1x_client *client;
-	struct device_node *np;
-	struct list_head list;
+struct tegra_drm_file {
+	struct list_head contexts;
 };
-
-static int host1x_add_drm_client(struct host1x_drm *host1x,
-				 struct device_node *np)
-{
-	struct host1x_drm_client *client;
-
-	client = kzalloc(sizeof(*client), GFP_KERNEL);
-	if (!client)
-		return -ENOMEM;
-
-	INIT_LIST_HEAD(&client->list);
-	client->np = of_node_get(np);
-
-	list_add_tail(&client->list, &host1x->drm_clients);
-
-	return 0;
-}
-
-static int host1x_activate_drm_client(struct host1x_drm *host1x,
-				      struct host1x_drm_client *drm,
-				      struct host1x_client *client)
-{
-	mutex_lock(&host1x->drm_clients_lock);
-	list_del_init(&drm->list);
-	list_add_tail(&drm->list, &host1x->drm_active);
-	drm->client = client;
-	mutex_unlock(&host1x->drm_clients_lock);
-
-	return 0;
-}
-
-static int host1x_remove_drm_client(struct host1x_drm *host1x,
-				    struct host1x_drm_client *client)
-{
-	mutex_lock(&host1x->drm_clients_lock);
-	list_del_init(&client->list);
-	mutex_unlock(&host1x->drm_clients_lock);
-
-	of_node_put(client->np);
-	kfree(client);
-
-	return 0;
-}
-
-static int host1x_parse_dt(struct host1x_drm *host1x)
-{
-	static const char * const compat[] = {
-		"nvidia,tegra20-dc",
-		"nvidia,tegra20-hdmi",
-		"nvidia,tegra20-gr2d",
-		"nvidia,tegra30-dc",
-		"nvidia,tegra30-hdmi",
-		"nvidia,tegra30-gr2d",
-	};
-	unsigned int i;
-	int err;
-
-	for (i = 0; i < ARRAY_SIZE(compat); i++) {
-		struct device_node *np;
-
-		for_each_child_of_node(host1x->dev->of_node, np) {
-			if (of_device_is_compatible(np, compat[i]) &&
-			    of_device_is_available(np)) {
-				err = host1x_add_drm_client(host1x, np);
-				if (err < 0)
-					return err;
-			}
-		}
-	}
-
-	return 0;
-}
-
-int host1x_drm_alloc(struct platform_device *pdev)
-{
-	struct host1x_drm *host1x;
-	int err;
-
-	host1x = devm_kzalloc(&pdev->dev, sizeof(*host1x), GFP_KERNEL);
-	if (!host1x)
-		return -ENOMEM;
-
-	mutex_init(&host1x->drm_clients_lock);
-	INIT_LIST_HEAD(&host1x->drm_clients);
-	INIT_LIST_HEAD(&host1x->drm_active);
-	mutex_init(&host1x->clients_lock);
-	INIT_LIST_HEAD(&host1x->clients);
-	host1x->dev = &pdev->dev;
-
-	err = host1x_parse_dt(host1x);
-	if (err < 0) {
-		dev_err(&pdev->dev, "failed to parse DT: %d\n", err);
-		return err;
-	}
-
-	host1x_set_drm_data(&pdev->dev, host1x);
-
-	return 0;
-}
-
-int host1x_drm_init(struct host1x_drm *host1x, struct drm_device *drm)
-{
-	struct host1x_client *client;
-
-	mutex_lock(&host1x->clients_lock);
-
-	list_for_each_entry(client, &host1x->clients, list) {
-		if (client->ops && client->ops->drm_init) {
-			int err = client->ops->drm_init(client, drm);
-			if (err < 0) {
-				dev_err(host1x->dev,
-					"DRM setup failed for %s: %d\n",
-					dev_name(client->dev), err);
-				mutex_unlock(&host1x->clients_lock);
-				return err;
-			}
-		}
-	}
-
-	mutex_unlock(&host1x->clients_lock);
-
-	return 0;
-}
-
-int host1x_drm_exit(struct host1x_drm *host1x)
-{
-	struct platform_device *pdev = to_platform_device(host1x->dev);
-	struct host1x_client *client;
-
-	if (!host1x->drm)
-		return 0;
-
-	mutex_lock(&host1x->clients_lock);
-
-	list_for_each_entry_reverse(client, &host1x->clients, list) {
-		if (client->ops && client->ops->drm_exit) {
-			int err = client->ops->drm_exit(client);
-			if (err < 0) {
-				dev_err(host1x->dev,
-					"DRM cleanup failed for %s: %d\n",
-					dev_name(client->dev), err);
-				mutex_unlock(&host1x->clients_lock);
-				return err;
-			}
-		}
-	}
-
-	mutex_unlock(&host1x->clients_lock);
-
-	drm_platform_exit(&tegra_drm_driver, pdev);
-	host1x->drm = NULL;
-
-	return 0;
-}
-
-int host1x_register_client(struct host1x_drm *host1x,
-			   struct host1x_client *client)
-{
-	struct host1x_drm_client *drm, *tmp;
-	int err;
-
-	mutex_lock(&host1x->clients_lock);
-	list_add_tail(&client->list, &host1x->clients);
-	mutex_unlock(&host1x->clients_lock);
-
-	list_for_each_entry_safe(drm, tmp, &host1x->drm_clients, list)
-		if (drm->np == client->dev->of_node)
-			host1x_activate_drm_client(host1x, drm, client);
-
-	if (list_empty(&host1x->drm_clients)) {
-		struct platform_device *pdev = to_platform_device(host1x->dev);
-
-		err = drm_platform_init(&tegra_drm_driver, pdev);
-		if (err < 0) {
-			dev_err(host1x->dev, "drm_platform_init(): %d\n", err);
-			return err;
-		}
-	}
-
-	return 0;
-}
-
-int host1x_unregister_client(struct host1x_drm *host1x,
-			     struct host1x_client *client)
-{
-	struct host1x_drm_client *drm, *tmp;
-	int err;
-
-	list_for_each_entry_safe(drm, tmp, &host1x->drm_active, list) {
-		if (drm->client == client) {
-			err = host1x_drm_exit(host1x);
-			if (err < 0) {
-				dev_err(host1x->dev, "host1x_drm_exit(): %d\n",
-					err);
-				return err;
-			}
-
-			host1x_remove_drm_client(host1x, drm);
-			break;
-		}
-	}
-
-	mutex_lock(&host1x->clients_lock);
-	list_del_init(&client->list);
-	mutex_unlock(&host1x->clients_lock);
-
-	return 0;
-}
 
 static int tegra_drm_load(struct drm_device *drm, unsigned long flags)
 {
-	struct host1x_drm *host1x;
+	struct host1x_device *device = to_host1x_device(drm->dev);
+	struct tegra_drm *tegra;
 	int err;
 
-	host1x = host1x_get_drm_data(drm->dev);
-	drm->dev_private = host1x;
-	host1x->drm = drm;
+	tegra = kzalloc(sizeof(*tegra), GFP_KERNEL);
+	if (!tegra)
+		return -ENOMEM;
+
+	dev_set_drvdata(drm->dev, tegra);
+	mutex_init(&tegra->clients_lock);
+	INIT_LIST_HEAD(&tegra->clients);
+	drm->dev_private = tegra;
+	tegra->drm = drm;
 
 	drm_mode_config_init(drm);
 
-	err = host1x_drm_init(host1x, drm);
+	err = host1x_device_init(device);
 	if (err < 0)
 		return err;
 
@@ -281,8 +67,15 @@ static int tegra_drm_load(struct drm_device *drm, unsigned long flags)
 
 static int tegra_drm_unload(struct drm_device *drm)
 {
+	struct host1x_device *device = to_host1x_device(drm->dev);
+	int err;
+
 	drm_kms_helper_poll_fini(drm);
 	tegra_drm_fb_exit(drm);
+
+	err = host1x_device_exit(device);
+	if (err < 0)
+		return err;
 
 	drm_mode_config_cleanup(drm);
 
@@ -291,7 +84,7 @@ static int tegra_drm_unload(struct drm_device *drm)
 
 static int tegra_drm_open(struct drm_device *drm, struct drm_file *filp)
 {
-	struct host1x_drm_file *fpriv;
+	struct tegra_drm_file *fpriv;
 
 	fpriv = kzalloc(sizeof(*fpriv), GFP_KERNEL);
 	if (!fpriv)
@@ -303,7 +96,7 @@ static int tegra_drm_open(struct drm_device *drm, struct drm_file *filp)
 	return 0;
 }
 
-static void host1x_drm_context_free(struct host1x_drm_context *context)
+static void tegra_drm_context_free(struct tegra_drm_context *context)
 {
 	context->client->ops->close_channel(context);
 	kfree(context);
@@ -311,16 +104,21 @@ static void host1x_drm_context_free(struct host1x_drm_context *context)
 
 static void tegra_drm_lastclose(struct drm_device *drm)
 {
-	struct host1x_drm *host1x = drm->dev_private;
+	struct tegra_drm *tegra = drm->dev_private;
 
-	tegra_fbdev_restore_mode(host1x->fbdev);
+	tegra_fbdev_restore_mode(tegra->fbdev);
 }
 
 #ifdef CONFIG_DRM_TEGRA_STAGING
-static bool host1x_drm_file_owns_context(struct host1x_drm_file *file,
-					 struct host1x_drm_context *context)
+static struct tegra_drm_context *tegra_drm_get_context(__u64 context)
 {
-	struct host1x_drm_context *ctx;
+	return (struct tegra_drm_context *)(uintptr_t)context;
+}
+
+static bool tegra_drm_file_owns_context(struct tegra_drm_file *file,
+					struct tegra_drm_context *context)
+{
+	struct tegra_drm_context *ctx;
 
 	list_for_each_entry(ctx, &file->contexts, list)
 		if (ctx == context)
@@ -366,10 +164,11 @@ static int tegra_gem_mmap(struct drm_device *drm, void *data,
 static int tegra_syncpt_read(struct drm_device *drm, void *data,
 			     struct drm_file *file)
 {
+	struct host1x *host = dev_get_drvdata(drm->dev->parent);
 	struct drm_tegra_syncpt_read *args = data;
-	struct host1x *host = dev_get_drvdata(drm->dev);
-	struct host1x_syncpt *sp = host1x_syncpt_get(host, args->id);
+	struct host1x_syncpt *sp;
 
+	sp = host1x_syncpt_get(host, args->id);
 	if (!sp)
 		return -EINVAL;
 
@@ -380,10 +179,11 @@ static int tegra_syncpt_read(struct drm_device *drm, void *data,
 static int tegra_syncpt_incr(struct drm_device *drm, void *data,
 			     struct drm_file *file)
 {
+	struct host1x *host1x = dev_get_drvdata(drm->dev->parent);
 	struct drm_tegra_syncpt_incr *args = data;
-	struct host1x *host = dev_get_drvdata(drm->dev);
-	struct host1x_syncpt *sp = host1x_syncpt_get(host, args->id);
+	struct host1x_syncpt *sp;
 
+	sp = host1x_syncpt_get(host1x, args->id);
 	if (!sp)
 		return -EINVAL;
 
@@ -393,10 +193,11 @@ static int tegra_syncpt_incr(struct drm_device *drm, void *data,
 static int tegra_syncpt_wait(struct drm_device *drm, void *data,
 			     struct drm_file *file)
 {
+	struct host1x *host1x = dev_get_drvdata(drm->dev->parent);
 	struct drm_tegra_syncpt_wait *args = data;
-	struct host1x *host = dev_get_drvdata(drm->dev);
-	struct host1x_syncpt *sp = host1x_syncpt_get(host, args->id);
+	struct host1x_syncpt *sp;
 
+	sp = host1x_syncpt_get(host1x, args->id);
 	if (!sp)
 		return -EINVAL;
 
@@ -407,26 +208,26 @@ static int tegra_syncpt_wait(struct drm_device *drm, void *data,
 static int tegra_open_channel(struct drm_device *drm, void *data,
 			      struct drm_file *file)
 {
+	struct tegra_drm_file *fpriv = file->driver_priv;
+	struct tegra_drm *tegra = drm->dev_private;
 	struct drm_tegra_open_channel *args = data;
-	struct host1x_client *client;
-	struct host1x_drm_context *context;
-	struct host1x_drm_file *fpriv = file->driver_priv;
-	struct host1x_drm *host1x = drm->dev_private;
+	struct tegra_drm_context *context;
+	struct tegra_drm_client *client;
 	int err = -ENODEV;
 
 	context = kzalloc(sizeof(*context), GFP_KERNEL);
 	if (!context)
 		return -ENOMEM;
 
-	list_for_each_entry(client, &host1x->clients, list)
-		if (client->class == args->client) {
+	list_for_each_entry(client, &tegra->clients, list)
+		if (client->base.class == args->client) {
 			err = client->ops->open_channel(client, context);
 			if (err)
 				break;
 
-			context->client = client;
 			list_add(&context->list, &fpriv->contexts);
 			args->context = (uintptr_t)context;
+			context->client = client;
 			return 0;
 		}
 
@@ -437,16 +238,17 @@ static int tegra_open_channel(struct drm_device *drm, void *data,
 static int tegra_close_channel(struct drm_device *drm, void *data,
 			       struct drm_file *file)
 {
+	struct tegra_drm_file *fpriv = file->driver_priv;
 	struct drm_tegra_close_channel *args = data;
-	struct host1x_drm_file *fpriv = file->driver_priv;
-	struct host1x_drm_context *context =
-		(struct host1x_drm_context *)(uintptr_t)args->context;
+	struct tegra_drm_context *context;
 
-	if (!host1x_drm_file_owns_context(fpriv, context))
+	context = tegra_drm_get_context(args->context);
+
+	if (!tegra_drm_file_owns_context(fpriv, context))
 		return -EINVAL;
 
 	list_del(&context->list);
-	host1x_drm_context_free(context);
+	tegra_drm_context_free(context);
 
 	return 0;
 }
@@ -454,19 +256,20 @@ static int tegra_close_channel(struct drm_device *drm, void *data,
 static int tegra_get_syncpt(struct drm_device *drm, void *data,
 			    struct drm_file *file)
 {
+	struct tegra_drm_file *fpriv = file->driver_priv;
 	struct drm_tegra_get_syncpt *args = data;
-	struct host1x_drm_file *fpriv = file->driver_priv;
-	struct host1x_drm_context *context =
-		(struct host1x_drm_context *)(uintptr_t)args->context;
+	struct tegra_drm_context *context;
 	struct host1x_syncpt *syncpt;
 
-	if (!host1x_drm_file_owns_context(fpriv, context))
+	context = tegra_drm_get_context(args->context);
+
+	if (!tegra_drm_file_owns_context(fpriv, context))
 		return -ENODEV;
 
-	if (args->index >= context->client->num_syncpts)
+	if (args->index >= context->client->base.num_syncpts)
 		return -EINVAL;
 
-	syncpt = context->client->syncpts[args->index];
+	syncpt = context->client->base.syncpts[args->index];
 	args->id = host1x_syncpt_id(syncpt);
 
 	return 0;
@@ -475,12 +278,13 @@ static int tegra_get_syncpt(struct drm_device *drm, void *data,
 static int tegra_submit(struct drm_device *drm, void *data,
 			struct drm_file *file)
 {
+	struct tegra_drm_file *fpriv = file->driver_priv;
 	struct drm_tegra_submit *args = data;
-	struct host1x_drm_file *fpriv = file->driver_priv;
-	struct host1x_drm_context *context =
-		(struct host1x_drm_context *)(uintptr_t)args->context;
+	struct tegra_drm_context *context;
 
-	if (!host1x_drm_file_owns_context(fpriv, context))
+	context = tegra_drm_get_context(args->context);
+
+	if (!tegra_drm_file_owns_context(fpriv, context))
 		return -ENODEV;
 
 	return context->client->ops->submit(context, args, drm, file);
@@ -559,15 +363,15 @@ static void tegra_drm_disable_vblank(struct drm_device *drm, int pipe)
 
 static void tegra_drm_preclose(struct drm_device *drm, struct drm_file *file)
 {
-	struct host1x_drm_file *fpriv = file->driver_priv;
-	struct host1x_drm_context *context, *tmp;
+	struct tegra_drm_file *fpriv = file->driver_priv;
+	struct tegra_drm_context *context, *tmp;
 	struct drm_crtc *crtc;
 
 	list_for_each_entry(crtc, &drm->mode_config.crtc_list, head)
 		tegra_dc_cancel_page_flip(crtc, file);
 
 	list_for_each_entry_safe(context, tmp, &fpriv->contexts, list)
-		host1x_drm_context_free(context);
+		tegra_drm_context_free(context);
 
 	kfree(fpriv);
 }
@@ -645,3 +449,97 @@ struct drm_driver tegra_drm_driver = {
 	.minor = DRIVER_MINOR,
 	.patchlevel = DRIVER_PATCHLEVEL,
 };
+
+int tegra_drm_register_client(struct tegra_drm *tegra,
+			      struct tegra_drm_client *client)
+{
+	mutex_lock(&tegra->clients_lock);
+	list_add_tail(&client->list, &tegra->clients);
+	mutex_unlock(&tegra->clients_lock);
+
+	return 0;
+}
+
+int tegra_drm_unregister_client(struct tegra_drm *tegra,
+				struct tegra_drm_client *client)
+{
+	mutex_lock(&tegra->clients_lock);
+	list_del_init(&client->list);
+	mutex_unlock(&tegra->clients_lock);
+
+	return 0;
+}
+
+static int host1x_drm_probe(struct host1x_device *device)
+{
+	return drm_host1x_init(&tegra_drm_driver, device);
+}
+
+static int host1x_drm_remove(struct host1x_device *device)
+{
+	drm_host1x_exit(&tegra_drm_driver, device);
+
+	return 0;
+}
+
+static const struct of_device_id host1x_drm_subdevs[] = {
+	{ .compatible = "nvidia,tegra20-dc", },
+	{ .compatible = "nvidia,tegra20-hdmi", },
+	{ .compatible = "nvidia,tegra20-gr2d", },
+	{ .compatible = "nvidia,tegra30-dc", },
+	{ .compatible = "nvidia,tegra30-hdmi", },
+	{ .compatible = "nvidia,tegra30-gr2d", },
+	{ /* sentinel */ }
+};
+
+static struct host1x_driver host1x_drm_driver = {
+	.name = "drm",
+	.probe = host1x_drm_probe,
+	.remove = host1x_drm_remove,
+	.subdevs = host1x_drm_subdevs,
+};
+
+static int __init host1x_drm_init(void)
+{
+	int err;
+
+	err = host1x_driver_register(&host1x_drm_driver);
+	if (err < 0)
+		return err;
+
+	err = platform_driver_register(&tegra_dc_driver);
+	if (err < 0)
+		goto unregister_host1x;
+
+	err = platform_driver_register(&tegra_hdmi_driver);
+	if (err < 0)
+		goto unregister_dc;
+
+	err = platform_driver_register(&tegra_gr2d_driver);
+	if (err < 0)
+		goto unregister_hdmi;
+
+	return 0;
+
+unregister_hdmi:
+	platform_driver_unregister(&tegra_hdmi_driver);
+unregister_dc:
+	platform_driver_unregister(&tegra_dc_driver);
+unregister_host1x:
+	host1x_driver_unregister(&host1x_drm_driver);
+	return err;
+}
+module_init(host1x_drm_init);
+
+static void __exit host1x_drm_exit(void)
+{
+	platform_driver_unregister(&tegra_gr2d_driver);
+	platform_driver_unregister(&tegra_hdmi_driver);
+	platform_driver_unregister(&tegra_dc_driver);
+	host1x_driver_unregister(&host1x_drm_driver);
+}
+module_exit(host1x_drm_exit);
+
+MODULE_AUTHOR("Thierry Reding <thierry.reding@avionic-design.de>");
+MODULE_DESCRIPTION("NVIDIA Tegra DRM driver");
+MODULE_LICENSE("GPL v2");
