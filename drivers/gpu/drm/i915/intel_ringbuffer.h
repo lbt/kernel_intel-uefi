@@ -140,6 +140,12 @@ struct  intel_ring_buffer {
 	struct list_head request_list;
 
 	/**
+	 * List of kernel managed batch buffer objects.
+	 */
+	struct list_head batch_pool_inactive_list;
+	struct list_head batch_pool_active_list;
+
+	/**
 	 * Do we have some not yet emitted requests outstanding?
 	 */
 	struct drm_i915_gem_request *preallocated_lazy_request;

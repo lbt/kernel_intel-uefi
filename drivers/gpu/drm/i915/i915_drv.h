@@ -1587,6 +1587,9 @@ struct drm_i915_gem_object {
 	struct drm_mm_node *stolen;
 	struct list_head global_list;
 
+	/** This object's place in the ring batch pool */
+	struct list_head ring_batch_pool_list;
+
 	struct list_head ring_list;
 	/** Used in execbuf to temporarily hold a ref */
 	struct list_head obj_exec_link;
@@ -1732,8 +1735,11 @@ struct drm_i915_gem_request {
 	/** Context related to this request */
 	struct i915_hw_context *ctx;
 
-	/** Batch buffer related to this request if any */
+	/** Batch buffer (user copy) related to this request if any */
 	struct drm_i915_gem_object *batch_obj;
+
+	/** Batch buffer (kernel copy) related to this request if any */
+	struct drm_i915_gem_object *krn_batch_obj;
 
 	/** Time at which this request was emitted, in jiffies. */
 	unsigned long emitted_jiffies;
@@ -1917,6 +1923,7 @@ extern int i915_enable_pc8 __read_mostly;
 extern int i915_pc8_timeout __read_mostly;
 extern bool i915_prefault_disable __read_mostly;
 extern int i915_enable_cmd_parser __read_mostly;
+extern int i915_enable_kernel_batch_copy __read_mostly;
 
 extern int i915_suspend(struct drm_device *dev, pm_message_t state);
 extern int i915_resume(struct drm_device *dev);
@@ -1973,6 +1980,10 @@ void
 i915_disable_pipestat(drm_i915_private_t *dev_priv, enum pipe pipe, u32 mask);
 
 /* i915_gem.c */
+int i915_gem_create(struct drm_file *file,
+		    struct drm_device *dev,
+		    uint64_t size,
+		    uint32_t *handle_p);
 int i915_gem_init_ioctl(struct drm_device *dev, void *data,
 			struct drm_file *file_priv);
 int i915_gem_create_ioctl(struct drm_device *dev, void *data,
@@ -2026,6 +2037,7 @@ void i915_gem_object_init(struct drm_i915_gem_object *obj,
 			 const struct drm_i915_gem_object_ops *ops);
 struct drm_i915_gem_object *i915_gem_alloc_object(struct drm_device *dev,
 						  size_t size);
+void *i915_gem_object_vmap(struct drm_i915_gem_object *obj);
 void i915_gem_free_object(struct drm_gem_object *obj);
 void i915_gem_vma_destroy(struct i915_vma *vma);
 

@@ -157,6 +157,38 @@ int i915_mutex_lock_interruptible(struct drm_device *dev)
 	return 0;
 }
 
+void*
+i915_gem_object_vmap(struct drm_i915_gem_object *obj)
+{
+	int i;
+	void *addr = NULL;
+	struct sg_page_iter sg_iter;
+	struct page **pages;
+
+	pages = drm_malloc_ab(obj->base.size >> PAGE_SHIFT, sizeof(*pages));
+	if (pages == NULL) {
+		DRM_DEBUG("Failed to get space for pages\n");
+		goto finish;
+	}
+
+	i = 0;
+	for_each_sg_page(obj->pages->sgl, &sg_iter, obj->pages->nents, 0) {
+		pages[i] = sg_page_iter_page(&sg_iter);
+		i++;
+	}
+
+	addr = vmap(pages, i, 0, PAGE_KERNEL);
+	if (addr == NULL) {
+		DRM_DEBUG("Failed to vmap pages\n");
+		goto finish;
+	}
+
+finish:
+	if (pages)
+		drm_free_large(pages);
+	return addr;
+}
+
 static inline bool
 i915_gem_object_is_inactive(struct drm_i915_gem_object *obj)
 {
@@ -224,7 +256,7 @@ void i915_gem_object_free(struct drm_i915_gem_object *obj)
 	kmem_cache_free(dev_priv->slab, obj);
 }
 
-static int
+int
 i915_gem_create(struct drm_file *file,
 		struct drm_device *dev,
 		uint64_t size,
@@ -2146,6 +2178,7 @@ int __i915_add_request(struct intel_ring_buffer *ring,
 	 * to explicitly hold another reference here.
 	 */
 	request->batch_obj = obj;
+	request->krn_batch_obj = NULL;
 
 	/* Hold a reference to the current context so that we can inspect
 	 * it later in case a hangcheck error event fires.
@@ -2333,6 +2366,12 @@ static void i915_gem_free_request(struct drm_i915_gem_request *request)
 
 	if (request->ctx)
 		i915_gem_context_unreference(request->ctx);
+
+	if (request->krn_batch_obj) {
+		list_move_tail(&request->krn_batch_obj->ring_batch_pool_list,
+				&request->ring->batch_pool_inactive_list);
+		i915_gem_object_unpin(request->krn_batch_obj);
+	}
 
 	kfree(request);
 }
@@ -4083,6 +4122,7 @@ void i915_gem_object_init(struct drm_i915_gem_object *obj,
 	INIT_LIST_HEAD(&obj->ring_list);
 	INIT_LIST_HEAD(&obj->obj_exec_link);
 	INIT_LIST_HEAD(&obj->vma_list);
+	INIT_LIST_HEAD(&obj->ring_batch_pool_list);
 
 	obj->ops = ops;
 
