@@ -107,7 +107,6 @@ static const struct drm_i915_cmd_descriptor render_cmds[] = {
 			.expected = 0
 	      }},
 	      .bits_count = 1                                          ),
-	CMD(  MI_BATCH_BUFFER_START,            SMI,   !F,  0xFF,   R  ),
 	CMD(  GFX_OP_3DSTATE_VF_STATISTICS,     S3D,    F,  1,      S  ),
 	CMD(  PIPELINE_SELECT,                  S3D,    F,  1,      S  ),
 	CMD(  MEDIA_VFE_STATE,			S3D,   !F,  0xFF,   B,
@@ -136,6 +135,10 @@ static const struct drm_i915_cmd_descriptor render_cmds[] = {
 	      .bits_count = 2					       ),
 };
 
+static struct drm_i915_cmd_descriptor ivb_render_cmds[] = {
+	CMD(  MI_BATCH_BUFFER_START,            SMI,   !F,  0xFF,   R  ),
+};
+
 static struct drm_i915_cmd_descriptor hsw_render_cmds[] = {
 	CMD(  MI_SET_PREDICATE,                 SMI,    F,  1,      S  ),
 	CMD(  MI_RS_CONTROL,                    SMI,    F,  1,      S  ),
@@ -146,6 +149,13 @@ static struct drm_i915_cmd_descriptor hsw_render_cmds[] = {
 	      .reg = { .offset = 1, .mask = 0x00EFFFFC }               ),
 	CMD(  MI_LOAD_URB_MEM,                  SMI,   !F,  0xFF,   S  ),
 	CMD(  MI_STORE_URB_MEM,                 SMI,   !F,  0xFF,   S  ),
+	CMD(  MI_BATCH_BUFFER_START,            SMI,   !F,  0xFF,   B,
+	      .bits = {{
+			.offset = 0,
+			.mask = MI_BATCH_NON_SECURE_HSW,
+			.expected = MI_BATCH_NON_SECURE_HSW
+	      }},
+	      .bits_count = 1                                          ),
 	CMD(  GFX_OP_3DSTATE_DX9_CONSTANTF_VS,  S3D,   !F,  0x7FF,  S  ),
 	CMD(  GFX_OP_3DSTATE_DX9_CONSTANTF_PS,  S3D,   !F,  0x7FF,  S  ),
 };
@@ -229,6 +239,7 @@ static const struct drm_i915_cmd_descriptor blt_cmds[] = {
 static const struct drm_i915_cmd_table gen7_render_cmds[] = {
 	{ common_cmds, ARRAY_SIZE(common_cmds) },
 	{ render_cmds, ARRAY_SIZE(render_cmds) },
+	{ ivb_render_cmds, ARRAY_SIZE(ivb_render_cmds) },
 };
 
 static struct drm_i915_cmd_table hsw_render_ring_cmds[] = {
