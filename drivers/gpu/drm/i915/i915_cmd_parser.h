@@ -65,15 +65,33 @@ static const struct drm_i915_cmd_descriptor common_cmds[] = {
 	CMD(  MI_REPORT_HEAD,                   SMI,    F,  1,      S  ),
 	CMD(  MI_SUSPEND_FLUSH,                 SMI,    F,  1,      S  ),
 	CMD(  MI_SEMAPHORE_MBOX,                SMI,   !F,  0xFF,   R  ),
-	CMD(  MI_STORE_DWORD_IMM,               SMI,   !F,  0x1FF,  S  ),
+	CMD(  MI_STORE_DWORD_IMM,               SMI,   !F,  0x1FF,  B,
+	      .bits = {{
+			.offset = 0,
+			.mask = MI_GLOBAL_GTT,
+			.expected = 0
+	      }},
+	      .bits_count = 1					       ),
 	CMD(  MI_STORE_DWORD_INDEX,             SMI,   !F,  0xFF,   R  ),
 	CMD(  MI_LOAD_REGISTER_IMM(1),          SMI,   !F,  0xFF,   W,
 	      .reg = { .offset = 1, .mask = 0x00EFFFFC }               ),
 	CMD(  MI_UPDATE_GTT,                    SMI,   !F,  0xFF,   R  ),
-	CMD(  MI_STORE_REGISTER_MEM(1),		SMI,   !F,  0xFF,   W,
-	      .reg = { .offset = 1, .mask = 0x00EFFFFC }               ),
-	CMD(  MI_LOAD_REGISTER_MEM,             SMI,   !F,  0xFF,   W,
-	      .reg = { .offset = 1, .mask = 0x00EFFFFC }               ),
+	CMD(  MI_STORE_REGISTER_MEM(1),		SMI,   !F,  0xFF,   W | B,
+	      .reg = { .offset = 1, .mask = 0x00EFFFFC },
+	      .bits = {{
+			.offset = 0,
+			.mask = MI_GLOBAL_GTT,
+			.expected = 0
+	      }},
+	      .bits_count = 1                                          ),
+	CMD(  MI_LOAD_REGISTER_MEM,             SMI,   !F,  0xFF,   W | B,
+	      .reg = { .offset = 1, .mask = 0x00EFFFFC },
+	      .bits = {{
+			.offset = 0,
+			.mask = MI_GLOBAL_GTT,
+			.expected = 0
+	      }},
+	      .bits_count = 1                                          ),
 };
 
 static const struct drm_i915_cmd_descriptor render_cmds[] = {
@@ -82,7 +100,13 @@ static const struct drm_i915_cmd_descriptor render_cmds[] = {
 	CMD(  MI_DISPLAY_FLIP,                  SMI,   !F,  0xFF,   R  ),
 	CMD(  MI_PREDICATE,                     SMI,    F,  1,      S  ),
 	CMD(  MI_TOPOLOGY_FILTER,               SMI,    F,  1,      S  ),
-	CMD(  MI_CLFLUSH,                       SMI,   !F,  0x3FF,  S  ),
+	CMD(  MI_CLFLUSH,                       SMI,   !F,  0x3FF,  B,
+	      .bits = {{
+			.offset = 0,
+			.mask = MI_GLOBAL_GTT,
+			.expected = 0
+	      }},
+	      .bits_count = 1                                          ),
 	CMD(  MI_BATCH_BUFFER_START,            SMI,   !F,  0xFF,   R  ),
 	CMD(  GFX_OP_3DSTATE_VF_STATISTICS,     S3D,    F,  1,      S  ),
 	CMD(  PIPELINE_SELECT,                  S3D,    F,  1,      S  ),
@@ -101,8 +125,15 @@ static const struct drm_i915_cmd_descriptor render_cmds[] = {
 			.offset = 1,
 			.mask = (PIPE_CONTROL_MMIO_WRITE | PIPE_CONTROL_NOTIFY),
 			.expected = 0
+	      },
+	      {
+			.offset = 1,
+			.mask = PIPE_CONTROL_GLOBAL_GTT_IVB,
+			.expected = 0,
+			.condition_offset = 1,
+			.condition_mask = PIPE_CONTROL_POST_SYNC_OP_MASK
 	      }},
-	      .bits_count = 1					       ),
+	      .bits_count = 2					       ),
 };
 
 static struct drm_i915_cmd_descriptor hsw_render_cmds[] = {
@@ -126,9 +157,22 @@ static const struct drm_i915_cmd_descriptor video_cmds[] = {
 			.offset = 0,
 			.mask = MI_FLUSH_DW_NOTIFY,
 			.expected = 0
+	      },
+	      {
+			.offset = 1,
+			.mask = MI_FLUSH_DW_USE_GTT,
+			.expected = 0,
+			.condition_offset = 0,
+			.condition_mask = MI_FLUSH_DW_OP_MASK
+	      }},
+	      .bits_count = 2					       ),
+	CMD(  MI_BATCH_BUFFER_START,            SMI,   !F,  0xFF,   B,
+	      .bits = {{
+			.offset = 0,
+			.mask = MI_BATCH_PPGTT_HSW,
+			.expected = MI_BATCH_PPGTT_HSW
 	      }},
 	      .bits_count = 1					       ),
-	CMD(  MI_BATCH_BUFFER_START,            SMI,   !F,  0xFF,   S  ),
 	CMD(  MFX_WAIT,                         SMFX,  !F,  0x3F,   S  ),
 };
 
@@ -143,8 +187,15 @@ static const struct drm_i915_cmd_descriptor blt_cmds[] = {
 			.offset = 0,
 			.mask = MI_FLUSH_DW_NOTIFY,
 			.expected = 0
+	      },
+	      {
+			.offset = 1,
+			.mask = MI_FLUSH_DW_USE_GTT,
+			.expected = 0,
+			.condition_offset = 0,
+			.condition_mask = MI_FLUSH_DW_OP_MASK
 	      }},
-	      .bits_count = 1					       ),
+	      .bits_count = 2					       ),
 	CMD(  MI_BATCH_BUFFER_START,            SMI,   !F,  0xFF,   R  ),
 	CMD(  COLOR_BLT,                        S2D,   !F,  0x1F,   S  ),
 	CMD(  SRC_COPY_BLT,                     S2D,   !F,  0x1F,   S  ),

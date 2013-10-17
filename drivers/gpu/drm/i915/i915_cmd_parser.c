@@ -138,7 +138,10 @@ int i915_parse_cmds(struct intel_ring_buffer *ring,
 {
 	int ret = 0;
 	unsigned int *cmd, *batch_base, *batch_end;
+	drm_i915_private_t *dev_priv =
+		(drm_i915_private_t *)ring->dev->dev_private;
 
+	WARN_ON(!dev_priv->mm.aliasing_ppgtt);
 	/* Needed because find_cmd() currently uses a static variable and
 	 * upstream may rework the locking such that multiple execbuffer2
 	 * calls may execute in parallel. We would need to rework find_cmd
@@ -226,6 +229,15 @@ int i915_parse_cmds(struct intel_ring_buffer *ring,
 				unsigned int dword =
 					cmd[desc->bits[i].offset] &
 					desc->bits[i].mask;
+
+				if (desc->bits[i].condition_mask != 0) {
+					unsigned int condition =
+						cmd[desc->bits[i].condition_offset] &
+						desc->bits[i].condition_mask;
+
+					if (condition == 0)
+						continue;
+				}
 
 				if (dword != desc->bits[i].expected) {
 					DRM_DEBUG_DRIVER("CMD: Rejected command 0x%08X for bitmask 0x%08X (exp=0x%08X act=0x%08X) (ring=%d)\n",

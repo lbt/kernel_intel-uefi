@@ -1171,11 +1171,17 @@ struct drm_i915_cmd_descriptor {
 	 * compared against an expected value. If the command does not match
 	 * the expected value, the parser rejects it. Only valid if flags has
 	 * the CMD_DESC_BITMASK bit set.
+	 *
+	 * If the check specifies a non-zero condition_mask then the parser
+	 * only performs the check when the bits specified by condition_mask
+	 * are non-zero.
 	 */
 	struct {
 		unsigned int offset;
 		unsigned int mask;
 		unsigned int expected;
+		unsigned int condition_offset;
+		unsigned int condition_mask;
 	} bits[MAX_CMD_DESC_BITMASKS];
 	/** Number of valid entries in the bits array */
 	int bits_count;
