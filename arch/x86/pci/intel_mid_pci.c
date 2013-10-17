@@ -149,12 +149,12 @@ static bool type1_access_ok(unsigned int bus, unsigned int devfn, int reg)
 	 * shim. Therefore, use the header type in shim instead.
 	 */
 	if (reg >= 0x100 || reg == PCI_STATUS || reg == PCI_HEADER_TYPE)
-		return 0;
+		return false;
 	if (bus == 0 && (devfn == PCI_DEVFN(2, 0)
 				|| devfn == PCI_DEVFN(0, 0)
 				|| devfn == PCI_DEVFN(3, 0)))
-		return 1;
-	return 0; /* langwell on others */
+		return true;
+	return false; /* langwell on others */
 }
 
 static int pci_read(struct pci_bus *bus, unsigned int devfn, int where,
