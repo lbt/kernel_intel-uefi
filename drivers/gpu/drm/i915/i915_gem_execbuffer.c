@@ -37,7 +37,7 @@
 #define  __EXEC_OBJECT_HAS_FENCE (1<<30)
 
 static int
-i915_gem_kernel_batch_copy(
+i915_do_secure_ops(
 		struct drm_device *dev,
 		struct drm_file *file,
 		struct intel_ring_buffer *ring,
@@ -49,10 +49,13 @@ i915_gem_kernel_batch_copy(
 	bool big_user_batch = false;
 	int krn_batch_size = 1024*512;
 	int i;
-	int ret = 0;
+	int copy_ret = 0, parse_ret = 0;
 	void *addr = NULL, *user_addr = NULL;
 	struct drm_i915_gem_object *obj = NULL;
 	struct list_head *iter;
+
+	if (!i915_enable_kernel_batch_copy)
+		goto parse_cmds;
 
 	/* Grab a free buffer from the pool. When there are too many
 	 * outstanding requests or there isn't one of sufficient size, allocate
@@ -76,7 +79,7 @@ i915_gem_kernel_batch_copy(
 	if (list_empty(&ring->batch_pool_inactive_list) || big_user_batch) {
 		obj = i915_gem_alloc_object(dev, krn_batch_size);
 		if (obj == NULL) {
-			ret = -ENOMEM;
+			copy_ret = -ENOMEM;
 			DRM_DEBUG("Failed to allocate gem object\n");
 			goto finish;
 		}
@@ -98,23 +101,23 @@ i915_gem_kernel_batch_copy(
 	obj = list_entry(ring->batch_pool_inactive_list.next,
 			 struct drm_i915_gem_object, ring_batch_pool_list);
 
-	ret = i915_gem_object_pin(obj, obj_to_ggtt(obj), 4096, true, false);
-	if (ret != 0) {
-		ret = -ENOMEM;
+	copy_ret = i915_gem_object_pin(obj, obj_to_ggtt(obj), 4096, true, false);
+	if (copy_ret != 0) {
+		copy_ret = -ENOMEM;
 		DRM_DEBUG("Failed to pin batch gem object\n");
 		goto finish;
 	}
 
 	addr = i915_gem_object_vmap(obj);
 	if (addr == NULL) {
-		ret = -ENOMEM;
+		copy_ret = -ENOMEM;
 		DRM_DEBUG("Failed to vmap batch pages\n");
 		goto finish;
 	}
 
 	user_addr = i915_gem_object_vmap(user_obj);
 	if (user_addr == NULL) {
-		ret = -ENOMEM;
+		copy_ret = -ENOMEM;
 		DRM_DEBUG("Failed to vmap user batch pages\n");
 		goto finish;
 	}
@@ -125,14 +128,36 @@ i915_gem_kernel_batch_copy(
 				   &ring->batch_pool_active_list);
 
 finish:
+parse_cmds:
+
+	/* Parse batch cmds for security violations. Use kernel copy if
+	 * available, otherwise parse the user's batch
+	 */
+	if (i915_enable_cmd_parser) {
+		if ((copy_ret == 0) && obj && addr)
+			parse_ret = i915_parse_cmds(ring,
+				args->batch_start_offset, (u32 *)addr,
+				obj->base.size);
+		else {
+			if (!user_addr)
+				user_addr = i915_gem_object_vmap(user_obj);
+
+			parse_ret = i915_parse_cmds(ring,
+				args->batch_start_offset, (u32 *)user_addr,
+				user_obj->base.size);
+		}
+	}
+
 	if (addr)
 		vunmap(addr);
 	if (user_addr)
 		vunmap(user_addr);
-	if (krn_batch_obj)
-		*krn_batch_obj = (ret == 0) ? obj : NULL;
 
-	return ret;
+	/* Update batch exec_start if kernel copy and parsing succeeded */
+	if (krn_batch_obj && (copy_ret == 0) && (parse_ret == 0))
+		*krn_batch_obj = obj;
+
+	return ((copy_ret == 0) && (parse_ret == 0) ? 0 : -EINVAL);
 }
 
 struct eb_vmas {
@@ -1286,32 +1311,25 @@ i915_gem_do_execbuffer(struct drm_device *dev, void *data,
 		goto err;
 	}
 
-	exec_start = i915_gem_obj_ggtt_offset(batch_obj) +
-		args->batch_start_offset;
-	exec_len = args->batch_len;
-
-	if (i915_enable_kernel_batch_copy) {
-		ret = i915_gem_kernel_batch_copy(dev, file, ring,
+	/* Do security things like copy the batch into a pool copy and scan
+	 * cmds for violations. */
+	ret = i915_do_secure_ops(dev, file, ring,
 				args, exec, batch_obj, &krn_batch_obj);
-		if ((ret == 0) && krn_batch_obj)
-			exec_start = i915_gem_obj_ggtt_offset(krn_batch_obj) +
-					     args->batch_start_offset;
-	}
+	if (ret)
+		goto err;
 
-	if (i915_enable_cmd_parser) {
-		ret = i915_parse_cmds(ring,
-				      batch_obj,
-				      args->batch_start_offset);
-		if (ret)
-			goto err;
+	exec_len = args->batch_len;
+	exec_start = args->batch_start_offset +
+		(krn_batch_obj ? i915_gem_obj_ggtt_offset(krn_batch_obj) :
+		 i915_gem_obj_ggtt_offset(batch_obj));
 
-		/* Set the DISPATCH_SECURE bit to remove the NON_SECURE bit
-		 * from MI_BATCH_BUFFER_START commands issued in the
-		 * dispatch_execbuffer implementations. We specifically don't
-		 * want that set when the command parser is enabled.
-		 */
+	/* Set the DISPATCH_SECURE bit to remove the NON_SECURE bit
+	 * from MI_BATCH_BUFFER_START commands issued in the
+	 * dispatch_execbuffer implementations. We specifically don't
+	 * want that set when the command parser is enabled.
+	 */
+	if (i915_enable_cmd_parser)
 		flags |= I915_DISPATCH_SECURE;
-	}
 
 	ret = i915_switch_context(ring, file, ctx_id);
 	if (ret)

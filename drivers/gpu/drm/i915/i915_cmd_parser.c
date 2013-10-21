@@ -99,45 +99,13 @@ static int valid_reg(const unsigned int *table, int count, unsigned int addr)
 	return 0;
 }
 
-/* TODO: merge with vmap code for batch copy */
-static unsigned int *vmap_batch(struct drm_i915_gem_object *obj)
-{
-	int i;
-	void *addr = NULL;
-	struct sg_page_iter sg_iter;
-	struct page **pages;
-
-	pages = drm_malloc_ab(obj->base.size >> PAGE_SHIFT, sizeof(*pages));
-	if (pages == NULL) {
-		DRM_DEBUG("Failed to get space for pages\n");
-		goto finish;
-	}
-
-	i = 0;
-	for_each_sg_page(obj->pages->sgl, &sg_iter, obj->pages->nents, 0) {
-		pages[i] = sg_page_iter_page(&sg_iter);
-		i++;
-	}
-
-	/* XXX: WC mapping used to avoid caching issues on non-LLC platforms */
-	addr = vmap(pages, i, VM_MAP, pgprot_writecombine(PAGE_KERNEL));
-	if (addr == NULL) {
-		DRM_DEBUG("Failed to vmap pages\n");
-		goto finish;
-	}
-
-finish:
-	if (pages)
-		drm_free_large(pages);
-	return addr;
-}
-
 int i915_parse_cmds(struct intel_ring_buffer *ring,
-		    struct drm_i915_gem_object *batch_obj,
-		    u32 batch_start_offset)
+		    u32 batch_start_offset,
+		    u32 *batch_base,
+		    u32 batch_obj_size)
 {
 	int ret = 0;
-	unsigned int *cmd, *batch_base, *batch_end;
+	unsigned int *cmd, *batch_end;
 	drm_i915_private_t *dev_priv =
 		(drm_i915_private_t *)ring->dev->dev_private;
 
@@ -153,14 +121,13 @@ int i915_parse_cmds(struct intel_ring_buffer *ring,
 	if (!ring->cmd_tables)
 		return 0;
 
-	batch_base = vmap_batch(batch_obj);
 	if (!batch_base) {
 		DRM_DEBUG_DRIVER("CMD: Failed to vmap batch\n");
 		return -ENOMEM;
 	}
 
 	cmd = batch_base + (batch_start_offset / sizeof(*cmd));
-	batch_end = cmd + (batch_obj->base.size / sizeof(*batch_end));
+	batch_end = cmd + (batch_obj_size / sizeof(*batch_end));
 
 	while (cmd < batch_end) {
 		const struct drm_i915_cmd_descriptor *desc;
@@ -258,8 +225,6 @@ int i915_parse_cmds(struct intel_ring_buffer *ring,
 		DRM_DEBUG_DRIVER("CMD: Got to the end of the buffer w/o a BBE cmd!\n");
 		ret = -EINVAL;
 	}
-
-	vunmap(batch_base);
 
 	return ret;
 }

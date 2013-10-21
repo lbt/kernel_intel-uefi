@@ -2349,8 +2349,9 @@ int i915_verify_lists(struct drm_device *dev);
 
 /* i915_cmd_parser.c */
 int i915_parse_cmds(struct intel_ring_buffer *ring,
-		    struct drm_i915_gem_object *batch_obj,
-		    u32 batch_start_offset);
+		    u32 batch_start_offset,
+		    u32 *batch_base,
+		    u32 batch_obj_size);
 int i915_cmd_parser_append_ioctl(struct drm_device *dev, void *data,
 				 struct drm_file *file_priv);
 void i915_cmd_parser_cleanup(drm_i915_private_t *dev_priv);
