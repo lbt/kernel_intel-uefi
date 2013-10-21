@@ -1947,6 +1947,7 @@ extern bool i915_fastboot __read_mostly;
 extern int i915_enable_pc8 __read_mostly;
 extern int i915_pc8_timeout __read_mostly;
 extern bool i915_prefault_disable __read_mostly;
+extern int i915_enable_cmd_parser __read_mostly;
 
 extern int i915_suspend(struct drm_device *dev, pm_message_t state);
 extern int i915_resume(struct drm_device *dev);
@@ -2364,6 +2365,11 @@ int i915_verify_lists(struct drm_device *dev);
 #else
 #define i915_verify_lists(dev) 0
 #endif
+
+/* i915_cmd_parser.c */
+int i915_parse_cmds(struct intel_ring_buffer *ring,
+		    struct drm_i915_gem_object *batch_obj,
+		    u32 batch_start_offset);
 
 /* i915_debugfs.c */
 int i915_debugfs_init(struct drm_minor *minor);

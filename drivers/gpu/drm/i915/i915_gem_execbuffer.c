@@ -1185,6 +1185,21 @@ i915_gem_do_execbuffer(struct drm_device *dev, void *data,
 		goto err;
 	}
 
+	if (i915_enable_cmd_parser) {
+		ret = i915_parse_cmds(ring,
+				      batch_obj,
+				      args->batch_start_offset);
+		if (ret)
+			goto err;
+
+		/* Set the DISPATCH_SECURE bit to remove the NON_SECURE bit
+		 * from MI_BATCH_BUFFER_START commands issued in the
+		 * dispatch_execbuffer implementations. We specifically don't
+		 * want that set when the command parser is enabled.
+		 */
+		flags |= I915_DISPATCH_SECURE;
+	}
+
 	ret = i915_switch_context(ring, file, ctx_id);
 	if (ret)
 		goto err;
