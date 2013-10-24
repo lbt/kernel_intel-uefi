@@ -1419,6 +1419,11 @@ typedef struct drm_i915_private {
 	/* Display functions */
 	struct drm_i915_display_funcs display;
 
+	/* curd information */
+	struct {
+		struct pid *pid;
+	} curd;
+
 	/* PCH chipset type */
 	enum intel_pch pch_type;
 	unsigned short pch_id;

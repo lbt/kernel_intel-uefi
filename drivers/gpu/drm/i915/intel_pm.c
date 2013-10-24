@@ -4980,6 +4980,10 @@ static void intel_gen6_powersave_work(struct work_struct *work)
 	}
 	dev_priv->rps.enabled = true;
 	mutex_unlock(&dev_priv->rps.hw_lock);
+	if (kill_pid_info(SIGHUP, SEND_SIG_FORCED, dev_priv->curd.pid)) {
+		put_pid(dev_priv->curd.pid);
+		dev_priv->curd.pid = NULL;
+	}
 }
 
 void intel_enable_gt_powersave(struct drm_device *dev)
