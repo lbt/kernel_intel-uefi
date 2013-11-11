@@ -269,7 +269,7 @@ static int gen6_ppgtt_init(struct i915_hw_ppgtt *ppgtt)
 	/* ppgtt PDEs reside in the global gtt pagetable, which has 512*1024
 	 * entries. For aliasing ppgtt support we just steal them at the end for
 	 * now. */
-       first_pd_entry_in_global_pt = gtt_total_entries(dev_priv->gtt);
+	first_pd_entry_in_global_pt = gtt_total_entries(dev_priv->gtt);
 
 	if (IS_HASWELL(dev)) {
 		ppgtt->pte_encode = hsw_pte_encode;
@@ -439,7 +439,7 @@ void i915_gem_restore_gtt_mappings(struct drm_device *dev)
 	dev_priv->gtt.gtt_clear_range(dev, dev_priv->gtt.start / PAGE_SIZE,
 				      dev_priv->gtt.total / PAGE_SIZE);
 
-	list_for_each_entry(obj, &dev_priv->mm.bound_list, gtt_list) {
+	list_for_each_entry(obj, &dev_priv->mm.bound_list, global_list) {
 		i915_gem_clflush_object(obj);
 		i915_gem_gtt_bind_object(obj, obj->cache_level);
 	}
@@ -631,7 +631,7 @@ void i915_gem_setup_global_gtt(struct drm_device *dev,
 		dev_priv->mm.gtt_space.color_adjust = i915_gtt_color_adjust;
 
 	/* Mark any preallocated objects as occupied */
-	list_for_each_entry(obj, &dev_priv->mm.bound_list, gtt_list) {
+	list_for_each_entry(obj, &dev_priv->mm.bound_list, global_list) {
 		DRM_DEBUG_KMS("reserving preallocated space: %x + %zx\n",
 			      obj->gtt_offset, obj->base.size);
 
