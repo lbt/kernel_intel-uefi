@@ -1521,4 +1521,5 @@ static int __init init_balloon_drv(void)
 module_init(init_balloon_drv);
 
 MODULE_DESCRIPTION("Hyper-V Balloon");
+MODULE_VERSION(HV_DRV_VERSION);
 MODULE_LICENSE("GPL");
