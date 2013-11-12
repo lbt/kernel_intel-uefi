@@ -3629,9 +3629,7 @@ EXPORT_SYMBOL_GPL(do_take_over_console);
  */
 void give_up_console(const struct consw *csw)
 {
-	console_lock();
-	do_unregister_con_driver(csw);
-	console_unlock();
+	unregister_con_driver(csw);
 }
 
 static int __init vtconsole_class_init(void)
