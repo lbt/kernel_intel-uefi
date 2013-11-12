@@ -1,5 +1,5 @@
 ///
-/// Use PTR_ERR_OR_ZERO rather than if(IS_ERR(...)) + PTR_ERR
+/// Use PTR_RET rather than if(IS_ERR(...)) + PTR_ERR
 ///
 // Confidence: High
 // Copyright: (C) 2012 Julia Lawall, INRIA/LIP6.  GPLv2.
@@ -7,7 +7,7 @@
 // URL: http://coccinelle.lip6.fr/
 // Options: -no_includes -include_headers
 //
-// Keywords: ERR_PTR, PTR_ERR, PTR_RET, PTR_ERR_OR_ZERO
+// Keywords: ERR_PTR, PTR_ERR, PTR_RET
 // Version min: 2.6.39
 //
 
@@ -21,21 +21,21 @@ expression ptr;
 @@
 
 - if (IS_ERR(ptr)) return PTR_ERR(ptr); else return 0;
-+ return PTR_ERR_OR_ZERO(ptr);
++ return PTR_RET(ptr);
 
 @depends on patch@
 expression ptr;
 @@
 
 - if (IS_ERR(ptr)) return PTR_ERR(ptr); return 0;
-+ return PTR_ERR_OR_ZERO(ptr);
++ return PTR_RET(ptr);
 
 @depends on patch@
 expression ptr;
 @@
 
 - (IS_ERR(ptr) ? PTR_ERR(ptr) : 0)
-+ PTR_ERR_OR_ZERO(ptr)
++ PTR_RET(ptr)
 
 @r1 depends on !patch@
 expression ptr;
