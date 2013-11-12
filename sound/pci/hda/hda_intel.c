@@ -62,7 +62,6 @@
 #include <linux/vga_switcheroo.h>
 #include <linux/firmware.h>
 #include "hda_codec.h"
-#include "hda_i915.h"
 
 
 static int index[SNDRV_CARDS] = SNDRV_DEFAULT_IDX;
@@ -542,10 +541,6 @@ struct azx {
 	/* for pending irqs */
 	struct work_struct irq_pending_work;
 
-#ifdef CONFIG_SND_HDA_I915
-	struct work_struct probe_work;
-#endif
-
 	/* reboot notifier (for mysterious hangup problem at power-down) */
 	struct notifier_block reboot_notifier;
 
@@ -599,7 +594,6 @@ enum {
 #define AZX_DCAPS_4K_BDLE_BOUNDARY (1 << 23)	/* BDLE in 4k boundary */
 #define AZX_DCAPS_COUNT_LPIB_DELAY  (1 << 25)	/* Take LPIB as delay */
 #define AZX_DCAPS_PM_RUNTIME	(1 << 26)	/* runtime PM support */
-#define AZX_DCAPS_I915_POWERWELL (1 << 27)	/* HSW i915 power well support */
 
 /* quirks for Intel PCH */
 #define AZX_DCAPS_INTEL_PCH_NOPM \
@@ -2906,8 +2900,6 @@ static int azx_suspend(struct device *dev)
 	pci_disable_device(pci);
 	pci_save_state(pci);
 	pci_set_power_state(pci, PCI_D3hot);
-	if (chip->driver_caps & AZX_DCAPS_I915_POWERWELL)
-		hda_display_power(false);
 	return 0;
 }
 
@@ -2920,8 +2912,6 @@ static int azx_resume(struct device *dev)
 	if (chip->disabled)
 		return 0;
 
-	if (chip->driver_caps & AZX_DCAPS_I915_POWERWELL)
-		hda_display_power(true);
 	pci_set_power_state(pci, PCI_D0);
 	pci_restore_state(pci);
 	if (pci_enable_device(pci) < 0) {
@@ -2954,8 +2944,6 @@ static int azx_runtime_suspend(struct device *dev)
 
 	azx_stop_chip(chip);
 	azx_clear_irq_pending(chip);
-	if (chip->driver_caps & AZX_DCAPS_I915_POWERWELL)
-		hda_display_power(false);
 	return 0;
 }
 
@@ -2964,8 +2952,6 @@ static int azx_runtime_resume(struct device *dev)
 	struct snd_card *card = dev_get_drvdata(dev);
 	struct azx *chip = card->private_data;
 
-	if (chip->driver_caps & AZX_DCAPS_I915_POWERWELL)
-		hda_display_power(true);
 	azx_init_pci(chip);
 	azx_init_chip(chip, 1);
 	return 0;
@@ -3190,10 +3176,6 @@ static int azx_free(struct azx *chip)
 	if (chip->fw)
 		release_firmware(chip->fw);
 #endif
-	if (chip->driver_caps & AZX_DCAPS_I915_POWERWELL) {
-		hda_display_power(false);
-		hda_i915_exit();
-	}
 	kfree(chip);
 
 	return 0;
@@ -3419,13 +3401,6 @@ static void azx_check_snoop_available(struct azx *chip)
 	}
 }
 
-#ifdef CONFIG_SND_HDA_I915
-static void azx_probe_work(struct work_struct *work)
-{
-	azx_probe_continue(container_of(work, struct azx, probe_work));
-}
-#endif
-
 /*
  * constructor
  */
@@ -3501,13 +3476,7 @@ static int azx_create(struct snd_card *card, struct pci_dev *pci,
 		return err;
 	}
 
-#ifdef CONFIG_SND_HDA_I915
-	/* continue probing in work context as may trigger request module */
-	INIT_WORK(&chip->probe_work, azx_probe_work);
-#endif
-
 	*rchip = chip;
-
 	return 0;
 }
 
@@ -3778,16 +3747,6 @@ static int azx_probe(struct pci_dev *pci,
 	}
 #endif /* CONFIG_SND_HDA_PATCH_LOADER */
 
-	/* continue probing in work context, avoid request_module deadlock */
-	if (probe_now && (chip->driver_caps & AZX_DCAPS_I915_POWERWELL)) {
-#ifdef CONFIG_SND_HDA_I915
-		probe_now = false;
-		schedule_work(&chip->probe_work);
-#else
-		snd_printk(KERN_ERR SFX "Haswell must build in CONFIG_SND_HDA_I915\n");
-#endif
-	}
-
 	if (probe_now) {
 		err = azx_probe_continue(chip);
 		if (err < 0)
@@ -3809,16 +3768,6 @@ static int azx_probe_continue(struct azx *chip)
 	struct pci_dev *pci = chip->pci;
 	int dev = chip->dev_index;
 	int err;
-
-	/* Request power well for Haswell HDA controller and codec */
-	if (chip->driver_caps & AZX_DCAPS_I915_POWERWELL) {
-		err = hda_i915_init();
-		if (err < 0) {
-			snd_printk(KERN_ERR SFX "Error request power-well from i915\n");
-			goto out_free;
-		}
-		hda_display_power(true);
-	}
 
 	err = azx_first_init(chip);
 	if (err < 0)
@@ -3914,14 +3863,11 @@ static DEFINE_PCI_DEVICE_TABLE(azx_ids) = {
 	  .driver_data = AZX_DRIVER_PCH | AZX_DCAPS_INTEL_PCH },
 	/* Haswell */
 	{ PCI_DEVICE(0x8086, 0x0a0c),
-	  .driver_data = AZX_DRIVER_SCH | AZX_DCAPS_INTEL_PCH |
-	  AZX_DCAPS_I915_POWERWELL },
+	  .driver_data = AZX_DRIVER_SCH | AZX_DCAPS_INTEL_PCH },
 	{ PCI_DEVICE(0x8086, 0x0c0c),
-	  .driver_data = AZX_DRIVER_SCH | AZX_DCAPS_INTEL_PCH |
-	  AZX_DCAPS_I915_POWERWELL },
+	  .driver_data = AZX_DRIVER_SCH | AZX_DCAPS_INTEL_PCH },
 	{ PCI_DEVICE(0x8086, 0x0d0c),
-	  .driver_data = AZX_DRIVER_SCH | AZX_DCAPS_INTEL_PCH |
-	  AZX_DCAPS_I915_POWERWELL },
+	  .driver_data = AZX_DRIVER_SCH | AZX_DCAPS_INTEL_PCH },
 	/* 5 Series/3400 */
 	{ PCI_DEVICE(0x8086, 0x3b56),
 	  .driver_data = AZX_DRIVER_SCH | AZX_DCAPS_INTEL_PCH_NOPM },
