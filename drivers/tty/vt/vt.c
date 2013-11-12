@@ -3301,11 +3301,8 @@ static int vt_unbind(struct con_driver *con)
 		if (first == 0 && last == MAX_NR_CONSOLES -1)
 			deflt = 1;
 
-		if (first != -1) {
-			console_lock();
-			do_unbind_con_driver(csw, first, last, deflt);
-			console_unlock();
-		}
+		if (first != -1)
+			unbind_con_driver(csw, first, last, deflt);
 
 		first = -1;
 		last = -1;
