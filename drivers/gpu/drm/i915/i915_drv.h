@@ -1531,6 +1531,12 @@ typedef struct drm_i915_private {
 		int count;
 	} append_reg[I915_NUM_RINGS];
 
+	/* Kernel managed batch buffer objects */
+	struct {
+		struct list_head inactive_list;
+		struct list_head active_list;
+	} batch_pool[I915_NUM_RINGS];
+
 	/* Old dri1 support infrastructure, beware the dragons ya fools entering
 	 * here! */
 	struct i915_dri1_state dri1;

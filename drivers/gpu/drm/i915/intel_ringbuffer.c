@@ -1328,8 +1328,6 @@ static int intel_init_ring_buffer(struct drm_device *dev,
 	ring->dev = dev;
 	INIT_LIST_HEAD(&ring->active_list);
 	INIT_LIST_HEAD(&ring->request_list);
-	INIT_LIST_HEAD(&ring->batch_pool_active_list);
-	INIT_LIST_HEAD(&ring->batch_pool_inactive_list);
 	ring->size = 32 * PAGE_SIZE;
 	memset(ring->sync_seqno, 0, sizeof(ring->sync_seqno));
 
@@ -1405,8 +1403,6 @@ err_hws:
 void intel_cleanup_ring_buffer(struct intel_ring_buffer *ring)
 {
 	struct drm_i915_private *dev_priv;
-	struct drm_i915_gem_object *obj;
-	struct list_head *iter;
 	int ret;
 
 	if (ring->obj == NULL)
@@ -1433,28 +1429,6 @@ void intel_cleanup_ring_buffer(struct intel_ring_buffer *ring)
 		ring->cleanup(ring);
 
 	cleanup_status_page(ring);
-
-	if (!list_empty(&ring->batch_pool_inactive_list)) {
-		list_for_each(iter, &ring->batch_pool_inactive_list) {
-			obj = list_entry(ring->batch_pool_inactive_list.next,
-					struct drm_i915_gem_object,
-					ring_batch_pool_list);
-
-			i915_gem_object_unpin(obj);
-			drm_gem_object_unreference(&obj->base);
-		}
-	}
-
-	if (!list_empty(&ring->batch_pool_active_list)) {
-		list_for_each(iter, &ring->batch_pool_active_list) {
-			obj = list_entry(ring->batch_pool_active_list.next,
-					struct drm_i915_gem_object,
-					ring_batch_pool_list);
-
-			i915_gem_object_unpin(obj);
-			drm_gem_object_unreference(&obj->base);
-		}
-	}
 }
 
 static int intel_ring_wait_seqno(struct intel_ring_buffer *ring, u32 seqno)

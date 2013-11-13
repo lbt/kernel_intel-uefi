@@ -2361,6 +2361,10 @@ static void i915_set_reset_status(struct intel_ring_buffer *ring,
 
 static void i915_gem_free_request(struct drm_i915_gem_request *request)
 {
+	struct drm_i915_private *dev_priv;
+
+	dev_priv = request->ring->dev->dev_private;
+
 	list_del(&request->list);
 	i915_gem_request_remove_from_client(request);
 
@@ -2369,7 +2373,7 @@ static void i915_gem_free_request(struct drm_i915_gem_request *request)
 
 	if (request->krn_batch_obj) {
 		list_move_tail(&request->krn_batch_obj->ring_batch_pool_list,
-				&request->ring->batch_pool_inactive_list);
+			&dev_priv->batch_pool[request->ring->id].inactive_list);
 		i915_gem_object_unpin(request->krn_batch_obj);
 	}
 

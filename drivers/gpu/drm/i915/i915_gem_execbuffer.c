@@ -46,86 +46,90 @@ i915_do_secure_ops(
 		struct drm_i915_gem_object *user_obj,
 		struct drm_i915_gem_object **krn_batch_obj)
 {
-	bool big_user_batch = false;
+	bool found_match = false;
 	int krn_batch_size = 1024*512;
 	int i;
 	int copy_ret = 0, parse_ret = 0;
 	void *addr = NULL, *user_addr = NULL;
 	struct drm_i915_gem_object *obj = NULL;
 	struct list_head *iter;
+	struct list_head *inactive_list;
+	struct list_head *active_list;
+	struct drm_i915_private *dev_priv;
 
 	if (!i915_enable_kernel_batch_copy)
 		goto parse_cmds;
 
-	/* Grab a free buffer from the pool. When there are too many
-	 * outstanding requests or there isn't one of sufficient size, allocate
-	 * a new one and add to tail of the list. Buffers are put back on the
-	 * batch_pool_inactive_list list when a request is completed, see
+	dev_priv = dev->dev_private;
+	inactive_list = &dev_priv->batch_pool[ring->id].inactive_list;
+	active_list = &dev_priv->batch_pool[ring->id].active_list;
+
+	/* Find a free buffer in the inactive list of sufficient size. Buffers
+	 * are put back on the inactive_list when a request is completed, see
 	 * i915_gem_free_request().
 	 */
-	if (!list_empty(&ring->batch_pool_inactive_list)) {
-		list_for_each(iter, &ring->batch_pool_inactive_list) {
-			obj = list_entry(ring->batch_pool_inactive_list.next,
+	if (!list_empty(inactive_list)) {
+		list_for_each(iter, inactive_list) {
+			obj = list_entry(inactive_list->next,
 					struct drm_i915_gem_object,
 					ring_batch_pool_list);
 
-			if (user_obj->base.size > obj->base.size) {
-				big_user_batch = true;
-				krn_batch_size = user_obj->base.size;
+			if (obj->base.size >= user_obj->base.size) {
+				found_match = true;
+				break;
 			}
 		}
 	}
 
-	if (list_empty(&ring->batch_pool_inactive_list) || big_user_batch) {
+	/* Allocate another buffer if needed */
+	if (found_match == false) {
+		krn_batch_size = max(krn_batch_size, (int)user_obj->base.size);
+
 		obj = i915_gem_alloc_object(dev, krn_batch_size);
 		if (obj == NULL) {
 			copy_ret = -ENOMEM;
-			DRM_DEBUG("Failed to allocate gem object\n");
+			DRM_DEBUG_DRIVER("Failed to allocate gem object\n");
 			goto finish;
 		}
 
 		i915_gem_object_set_cache_level(obj, I915_CACHE_NONE);
 
-		list_add_tail(&obj->ring_batch_pool_list,
-			      &ring->batch_pool_inactive_list);
+		list_add_tail(&obj->ring_batch_pool_list, inactive_list);
 
 		i = 0;
-		list_for_each(iter, &ring->batch_pool_inactive_list)
+		list_for_each(iter, inactive_list)
 			i++;
-		list_for_each(iter, &ring->batch_pool_active_list)
+		list_for_each(iter, active_list)
 			i++;
-		DRM_DEBUG("%s has %d buffers in the dma pool\n", ring->name, i);
+		DRM_DEBUG_DRIVER("%s has %d buffers in the dma pool\n",
+				ring->name, i);
 	}
-
-	/* Get available pool buffer */
-	obj = list_entry(ring->batch_pool_inactive_list.next,
-			 struct drm_i915_gem_object, ring_batch_pool_list);
 
 	copy_ret = i915_gem_object_pin(obj, obj_to_ggtt(obj), 4096, true, false);
 	if (copy_ret != 0) {
 		copy_ret = -ENOMEM;
-		DRM_DEBUG("Failed to pin batch gem object\n");
+		DRM_DEBUG_DRIVER("Failed to pin batch gem object\n");
 		goto finish;
 	}
 
 	addr = i915_gem_object_vmap(obj);
 	if (addr == NULL) {
 		copy_ret = -ENOMEM;
-		DRM_DEBUG("Failed to vmap batch pages\n");
+		DRM_DEBUG_DRIVER("Failed to vmap batch pages\n");
 		goto finish;
 	}
 
 	user_addr = i915_gem_object_vmap(user_obj);
 	if (user_addr == NULL) {
 		copy_ret = -ENOMEM;
-		DRM_DEBUG("Failed to vmap user batch pages\n");
+		DRM_DEBUG_DRIVER("Failed to vmap user batch pages\n");
 		goto finish;
 	}
 
 	memcpy(addr, user_addr, user_obj->base.size);
 
 	list_move_tail(&obj->ring_batch_pool_list,
-				   &ring->batch_pool_active_list);
+				   active_list);
 
 finish:
 parse_cmds:
