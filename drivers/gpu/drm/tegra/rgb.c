@@ -8,9 +8,6 @@
  */
 
 #include <linux/clk.h>
-#include <linux/module.h>
-#include <linux/of.h>
-#include <linux/platform_device.h>
 
 #include "drm.h"
 #include "dc.h"
@@ -147,6 +144,13 @@ int tegra_dc_rgb_probe(struct tegra_dc *dc)
 	if (!rgb)
 		return -ENOMEM;
 
+	rgb->output.dev = dc->dev;
+	rgb->output.of_node = np;
+
+	err = tegra_output_probe(&rgb->output);
+	if (err < 0)
+		return err;
+
 	rgb->clk = devm_clk_get(dc->dev, NULL);
 	if (IS_ERR(rgb->clk)) {
 		dev_err(dc->dev, "failed to get clock\n");
@@ -165,14 +169,21 @@ int tegra_dc_rgb_probe(struct tegra_dc *dc)
 		return err;
 	}
 
-	rgb->output.dev = dc->dev;
-	rgb->output.of_node = np;
+	dc->rgb = &rgb->output;
 
-	err = tegra_output_parse_dt(&rgb->output);
+	return 0;
+}
+
+int tegra_dc_rgb_remove(struct tegra_dc *dc)
+{
+	int err;
+
+	if (!dc->rgb)
+		return 0;
+
+	err = tegra_output_remove(dc->rgb);
 	if (err < 0)
 		return err;
-
-	dc->rgb = &rgb->output;
 
 	return 0;
 }
