@@ -215,7 +215,15 @@ long i915_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 	if (nr < DRM_COMMAND_BASE + DRM_ARRAY_SIZE(i915_compat_ioctls))
 		fn = i915_compat_ioctls[nr - DRM_COMMAND_BASE];
-
+#ifdef CONFIG_DRM_VXD_BYT
+{
+	struct drm_i915_private *dev_priv = dev->dev_private;
+	if ((nr >= DRM_COMMAND_VXD_BASE) &&
+		(nr < DRM_COMMAND_VXD_BASE + DRM_COMMAND_VXD_SIZE)) {
+		return dev_priv->vxd_ioctl(filp, cmd, arg);
+	}
+}
+#endif
 	if (fn != NULL)
 		ret = (*fn) (filp, cmd, arg);
 	else
