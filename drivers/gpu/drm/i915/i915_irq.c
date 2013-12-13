@@ -1154,6 +1154,11 @@ static void snb_gt_irq_handler(struct drm_device *dev,
 
 	if (gt_iir & GT_RENDER_L3_PARITY_ERROR_INTERRUPT)
 		ivybridge_parity_error_irq_handler(dev);
+
+	if (gt_iir & GT_RENDER_PERFMON_BUFFER_INTERRUPT) {
+		atomic_inc(&dev_priv->perfmon_buffer_interrupts);
+		wake_up_all(&dev_priv->perfmon_buffer_queue);
+	}
 }
 
 #define HPD_STORM_DETECT_PERIOD 1000
@@ -2406,6 +2411,9 @@ static void gen5_gt_irq_postinstall(struct drm_device *dev)
 		dev_priv->gt_irq_mask = ~GT_RENDER_L3_PARITY_ERROR_INTERRUPT;
 		gt_irqs |= GT_RENDER_L3_PARITY_ERROR_INTERRUPT;
 	}
+
+	if (IS_GEN7(dev))
+		gt_irqs |= GT_RENDER_PERFMON_BUFFER_INTERRUPT;
 
 	gt_irqs |= GT_RENDER_USER_INTERRUPT;
 	if (IS_GEN5(dev)) {

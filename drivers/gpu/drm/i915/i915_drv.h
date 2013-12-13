@@ -1355,6 +1355,10 @@ typedef struct drm_i915_private {
 	struct intel_shared_dpll shared_dplls[I915_NUM_PLLS];
 	struct intel_ddi_plls ddi_plls;
 
+	/* perfmon interrupt support */
+	wait_queue_head_t perfmon_buffer_queue;
+	atomic_t perfmon_buffer_interrupts;
+
 	/* Reclocking support */
 	bool render_reclock_avail;
 	bool lvds_downclock_avail;
@@ -2543,6 +2547,9 @@ bool i915_is_device_resuming(struct drm_device *dev);
 bool i915_is_device_suspended(struct drm_device *dev);
 bool i915_is_device_suspending(struct drm_device *dev);
 
+/* i195_perfmon.c */
+int i915_perfmon_ioctl(struct drm_device *dev, void *data,
+	struct drm_file *file);
 
 #define __i915_read(x) \
 	u##x i915_read##x(struct drm_i915_private *dev_priv, u32 reg, bool trace);
