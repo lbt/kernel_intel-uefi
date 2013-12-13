@@ -39,10 +39,15 @@
 #define ICH_V10CORP_GPIO	0xa01
 #define ICH_V10CONS_GPIO	0xa11
 
+/* pwrbtn_version enumerants */
+#define ICH_PWRBTN_ICH	0
+#define ICH_PWRBTN_BYT	1
+
 struct lpc_ich_info {
 	char name[32];
 	unsigned int iTCO_version;
 	unsigned int gpio_version;
+	unsigned int pwrbtn_version;
 	u8 use_gpio;
 };
 
