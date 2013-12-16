@@ -3382,7 +3382,8 @@ void gen6_set_rps(struct drm_device *dev, u8 val)
 		return;
 	}
 
-	gen6_set_rps_thresholds(dev_priv, val);
+	if (!dev_priv->rps.manual_mode)
+		gen6_set_rps_thresholds(dev_priv, val);
 
 	if (IS_HASWELL(dev))
 		I915_WRITE(GEN6_RPNSWREQ,
@@ -3406,10 +3407,42 @@ void gen6_set_rps(struct drm_device *dev, u8 val)
 	trace_intel_gpu_freq_change(val * 50);
 }
 
+void gen6_set_rps_mode(struct drm_device *dev, bool manual)
+{
+	struct drm_i915_private *dev_priv = dev->dev_private;
+	u8 delay;
+
+	if ((INTEL_INFO(dev)->gen < 6) ||
+	     IS_VALLEYVIEW(dev) ||
+	     IS_BROADWELL(dev)) {
+		DRM_DEBUG_DRIVER("RPS mode change not supported\n");
+		return;
+	}
+
+	WARN_ON(!mutex_is_locked(&dev_priv->rps.hw_lock));
+
+	dev_priv->rps.manual_mode = manual;
+
+	/* Manual mode disables/ignores load-based inputs and allows render
+	 * performance state to be controlled externally. */
+	if (manual) {
+		I915_WRITE(GEN6_RP_CONTROL,
+			   GEN6_RP_MEDIA_HW_NORMAL_MODE);
+		delay = (I915_READ(GEN6_GT_PERF_STATUS) & 0xff00) >> 8;
+	} else {
+		/* Force a reset */
+		dev_priv->rps.power = HIGH_POWER;
+		dev_priv->rps.cur_delay = 0;
+		delay = dev_priv->rps.min_delay;
+	}
+
+	gen6_set_rps(dev, delay);
+}
+
 void gen6_rps_idle(struct drm_i915_private *dev_priv)
 {
 	mutex_lock(&dev_priv->rps.hw_lock);
-	if (dev_priv->rps.enabled) {
+	if (dev_priv->rps.enabled && !dev_priv->rps.manual_mode) {
 		if (dev_priv->info->is_valleyview)
 			valleyview_set_rps(dev_priv->dev, dev_priv->rps.min_delay);
 		else
@@ -3422,7 +3455,7 @@ void gen6_rps_idle(struct drm_i915_private *dev_priv)
 void gen6_rps_boost(struct drm_i915_private *dev_priv)
 {
 	mutex_lock(&dev_priv->rps.hw_lock);
-	if (dev_priv->rps.enabled) {
+	if (dev_priv->rps.enabled && !dev_priv->rps.manual_mode) {
 		if (dev_priv->info->is_valleyview)
 			valleyview_set_rps(dev_priv->dev, dev_priv->rps.max_delay);
 		else
@@ -3746,8 +3779,7 @@ static void gen6_enable_rps(struct drm_device *dev)
 		DRM_DEBUG_DRIVER("Failed to set the min frequency\n");
 	}
 
-	dev_priv->rps.power = HIGH_POWER; /* force a reset */
-	gen6_set_rps(dev_priv->dev, dev_priv->rps.min_delay);
+	gen6_set_rps_mode(dev, dev_priv->rps.manual_mode);
 
 	gen6_enable_rps_interrupts(dev);
 
