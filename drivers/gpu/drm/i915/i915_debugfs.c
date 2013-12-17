@@ -1447,12 +1447,54 @@ static int i915_sr_status(struct seq_file *m, void *unused)
 		sr_enabled = I915_READ(INSTPM) & INSTPM_SELF_EN;
 	else if (IS_PINEVIEW(dev))
 		sr_enabled = I915_READ(DSPFW3) & PINEVIEW_SELF_REFRESH_EN;
+	else if (IS_VALLEYVIEW(dev))
+		sr_enabled = I915_READ(FW_BLC_SELF_VLV) & FW_CSPWRDWNEN;
 
 	seq_printf(m, "self-refresh: %s\n",
 		   sr_enabled ? "enabled" : "disabled");
 
 	return 0;
 }
+
+static int i915_sr_disable_get(void *data, u64 *val)
+{
+	struct drm_device *dev = data;
+	drm_i915_private_t *dev_priv = dev->dev_private;
+
+	*val = dev_priv->sr_disable;
+
+	return 0;
+}
+
+static int i915_sr_disable_set(void *data, u64 val)
+{
+	struct drm_device *dev = data;
+	drm_i915_private_t *dev_priv = dev->dev_private;
+	struct drm_crtc *crtc;
+
+	if (dev_priv->sr_disable == (bool)val)
+		return 0;
+
+	drm_modeset_lock_all(dev);
+
+	DRM_DEBUG_DRIVER("Setting CxSR disable %s\n",
+			 val ? "true" : "false");
+
+	dev_priv->sr_disable = (bool)val;
+
+	/* Reset enabled crtc to force CxSR state update */
+	list_for_each_entry(crtc, &dev->mode_config.crtc_list, head)
+		if (crtc->enabled)
+			intel_crtc_restore_mode(crtc);
+
+	drm_modeset_unlock_all(dev);
+
+	return 0;
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(i915_sr_disable_fops,
+			i915_sr_disable_get, i915_sr_disable_set,
+			"%llu\n");
 
 static int i915_emon_status(struct seq_file *m, void *unused)
 {
@@ -3459,6 +3501,7 @@ static const struct i915_debugfs_files {
 	{"i915_rc6_disable", &i915_rc6_disable_fops},
 	{"i915_ips_disable", &i915_ips_disable_fops},
 	{"i915_fbc_disable", &i915_fbc_disable_fops},
+	{"i915_sr_disable", &i915_sr_disable_fops},
 	{"i915_cache_sharing", &i915_cache_sharing_fops},
 	{"i915_ring_stop", &i915_ring_stop_fops},
 	{"i915_ring_missed_irq", &i915_ring_missed_irq_fops},
