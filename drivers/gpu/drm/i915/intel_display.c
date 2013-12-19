@@ -3508,10 +3508,17 @@ static void intel_disable_planes(struct drm_crtc *crtc)
 
 void hsw_enable_ips(struct intel_crtc *crtc)
 {
-	struct drm_i915_private *dev_priv = crtc->base.dev->dev_private;
+	struct drm_device *dev = crtc->base.dev;
+	struct drm_i915_private *dev_priv = dev->dev_private;
 
 	if (!crtc->config.ips_enabled)
 		return;
+
+	if (!crtc->primary_enabled)
+		return;
+
+	/* Enabling IPS and primary plane on the same vblank leads to underruns :( */
+	intel_wait_for_vblank(dev, crtc->pipe);
 
 	/* We can only enable IPS after we enable a plane and wait for a vblank.
 	 * We guarantee that the plane is enabled by calling intel_enable_ips
@@ -3649,6 +3656,7 @@ static void ironlake_crtc_enable(struct drm_crtc *crtc)
 	 */
 	intel_crtc_load_lut(crtc);
 
+	intel_crtc->primary_enabled = true;
 	intel_update_watermarks(crtc);
 	intel_enable_pipe(dev_priv, pipe,
 			  intel_crtc->config.has_pch_encoder, false);
@@ -3795,6 +3803,7 @@ static void haswell_crtc_enable(struct drm_crtc *crtc)
 	intel_ddi_set_pipe_settings(crtc);
 	intel_ddi_enable_transcoder_func(crtc);
 
+	intel_crtc->primary_enabled = true;
 	intel_update_watermarks(crtc);
 	intel_enable_pipe(dev_priv, pipe,
 			  intel_crtc->config.has_pch_encoder, false);
@@ -3905,6 +3914,8 @@ static void ironlake_crtc_disable(struct drm_crtc *crtc)
 
 	intel_crtc->active = false;
 	intel_update_watermarks(crtc);
+	/* no more vblanks on this pipe, so force it */
+	ilk_update_pipe_wm(dev, pipe);
 
 	mutex_lock(&dev->struct_mutex);
 	intel_update_fbc(dev);
@@ -3952,6 +3963,8 @@ static void haswell_crtc_disable(struct drm_crtc *crtc)
 
 	intel_crtc->active = false;
 	intel_update_watermarks(crtc);
+	/* no more vblanks on this pipe, so force it */
+	ilk_update_pipe_wm(dev, pipe);
 
 	mutex_lock(&dev->struct_mutex);
 	intel_update_fbc(dev);
@@ -4237,6 +4250,7 @@ static void valleyview_crtc_enable(struct drm_crtc *crtc)
 
 	intel_crtc_load_lut(crtc);
 
+	intel_crtc->primary_enabled = true;
 	intel_update_watermarks(crtc);
 	intel_enable_pipe(dev_priv, pipe, false, is_dsi);
 	intel_enable_primary_plane(dev_priv, plane, pipe);
@@ -4275,6 +4289,7 @@ static void i9xx_crtc_enable(struct drm_crtc *crtc)
 
 	intel_crtc_load_lut(crtc);
 
+	intel_crtc->primary_enabled = true;
 	intel_update_watermarks(crtc);
 	intel_enable_pipe(dev_priv, pipe, false, false);
 	intel_enable_primary_plane(dev_priv, plane, pipe);
@@ -10301,6 +10316,8 @@ static void intel_crtc_init(struct drm_device *dev, int pipe)
 
 	intel_crtc->disable_sprite = false;
 
+	init_waitqueue_head(&intel_crtc->vbl_wait);
+
 	BUG_ON(pipe >= ARRAY_SIZE(dev_priv->plane_to_crtc_mapping) ||
 	       dev_priv->plane_to_crtc_mapping[intel_crtc->plane] != NULL);
 	dev_priv->plane_to_crtc_mapping[intel_crtc->plane] = &intel_crtc->base;
@@ -11368,7 +11385,7 @@ void intel_modeset_setup_hw_state(struct drm_device *dev,
 		pll->on = false;
 	}
 
-	if (IS_HASWELL(dev))
+	if (HAS_PCH_SPLIT(dev))
 		ilk_wm_get_hw_state(dev);
 
 	if (force_restore) {

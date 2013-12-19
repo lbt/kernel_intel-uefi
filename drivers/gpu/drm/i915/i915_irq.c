@@ -402,6 +402,10 @@ bool intel_set_cpu_fifo_underrun_reporting(struct drm_device *dev,
 
 done:
 	spin_unlock_irqrestore(&dev_priv->irq_lock, flags);
+
+	if (!enable && ret)
+		mod_timer(&dev_priv->underrun_reenable_timer, jiffies + 2 * HZ);
+
 	return ret;
 }
 
@@ -454,9 +458,24 @@ bool intel_set_pch_fifo_underrun_reporting(struct drm_device *dev,
 
 done:
 	spin_unlock_irqrestore(&dev_priv->irq_lock, flags);
+
+	if (!enable && ret)
+		mod_timer(&dev_priv->underrun_reenable_timer, jiffies + 2 * HZ);
+
 	return ret;
 }
 
+
+static void i915_underrun_reenable(unsigned long data)
+{
+	struct drm_device *dev = (struct drm_device *)data;
+	int pipe;
+
+	for_each_pipe(pipe) {
+		intel_set_pch_fifo_underrun_reporting(dev, pipe, true);
+		intel_set_cpu_fifo_underrun_reporting(dev, pipe, true);
+	}
+}
 
 void
 i915_enable_pipestat(drm_i915_private_t *dev_priv, enum pipe pipe, u32 mask)
@@ -757,6 +776,12 @@ static int i915_get_crtc_scanoutpos(struct drm_device *dev, int pipe,
 	in_vbl = position >= vbl_start && position < vbl_end;
 
 	/*
+	 * FIXME provide a version that just gives the raw vpos
+	 * and doesn't do all these fancy tricks. That is what
+	 * we want for the vblank evade trick.
+	 */
+#if 0
+	/*
 	 * While in vblank, position will be negative
 	 * counting up towards 0 at vbl_end. And outside
 	 * vblank, position will be positive counting
@@ -766,6 +791,7 @@ static int i915_get_crtc_scanoutpos(struct drm_device *dev, int pipe,
 		position -= vbl_end;
 	else
 		position += vtotal - vbl_end;
+#endif
 
 	if (IS_GEN2(dev) || IS_G4X(dev) || INTEL_INFO(dev)->gen >= 5) {
 		*vpos = position;
@@ -780,6 +806,16 @@ static int i915_get_crtc_scanoutpos(struct drm_device *dev, int pipe,
 		ret |= DRM_SCANOUTPOS_INVBL;
 
 	return ret;
+}
+
+int i915_get_crtc_vpos(struct drm_crtc *crtc)
+{
+	int vpos = 0, hpos = 0;
+
+	i915_get_crtc_scanoutpos(crtc->dev, to_intel_crtc(crtc)->pipe, &vpos,
+				 &hpos, NULL, NULL);
+
+	return vpos;
 }
 
 static int i915_get_vblank_timestamp(struct drm_device *dev, int pipe,
@@ -1448,8 +1484,7 @@ static irqreturn_t valleyview_irq_handler(int irq, void *arg)
 			 */
 			if (pipe_stats[pipe] & 0x8000ffff) {
 				if (pipe_stats[pipe] & PIPE_FIFO_UNDERRUN_STATUS)
-					DRM_DEBUG_DRIVER("pipe %c underrun\n",
-							 pipe_name(pipe));
+					DRM_ERROR("pipe %c underrun\n", pipe_name(pipe));
 				I915_WRITE(reg, pipe_stats[pipe]);
 			}
 		}
@@ -1545,12 +1580,12 @@ static void ibx_irq_handler(struct drm_device *dev, u32 pch_iir)
 	if (pch_iir & SDE_TRANSA_FIFO_UNDER)
 		if (intel_set_pch_fifo_underrun_reporting(dev, TRANSCODER_A,
 							  false))
-			DRM_DEBUG_DRIVER("PCH transcoder A FIFO underrun\n");
+			DRM_ERROR("PCH transcoder A FIFO underrun\n");
 
 	if (pch_iir & SDE_TRANSB_FIFO_UNDER)
 		if (intel_set_pch_fifo_underrun_reporting(dev, TRANSCODER_B,
 							  false))
-			DRM_DEBUG_DRIVER("PCH transcoder B FIFO underrun\n");
+			DRM_ERROR("PCH transcoder B FIFO underrun\n");
 }
 
 static void ivb_err_int_handler(struct drm_device *dev)
@@ -1566,8 +1601,7 @@ static void ivb_err_int_handler(struct drm_device *dev)
 		if (err_int & ERR_INT_FIFO_UNDERRUN(pipe)) {
 			if (intel_set_cpu_fifo_underrun_reporting(dev, pipe,
 								  false))
-				DRM_DEBUG_DRIVER("Pipe %c FIFO underrun\n",
-						 pipe_name(pipe));
+				DRM_ERROR("Pipe %c FIFO underrun\n", pipe_name(pipe));
 		}
 
 		if (err_int & ERR_INT_PIPE_CRC_DONE(pipe)) {
@@ -1592,17 +1626,17 @@ static void cpt_serr_int_handler(struct drm_device *dev)
 	if (serr_int & SERR_INT_TRANS_A_FIFO_UNDERRUN)
 		if (intel_set_pch_fifo_underrun_reporting(dev, TRANSCODER_A,
 							  false))
-			DRM_DEBUG_DRIVER("PCH transcoder A FIFO underrun\n");
+			DRM_ERROR("PCH transcoder A FIFO underrun\n");
 
 	if (serr_int & SERR_INT_TRANS_B_FIFO_UNDERRUN)
 		if (intel_set_pch_fifo_underrun_reporting(dev, TRANSCODER_B,
 							  false))
-			DRM_DEBUG_DRIVER("PCH transcoder B FIFO underrun\n");
+			DRM_ERROR("PCH transcoder B FIFO underrun\n");
 
 	if (serr_int & SERR_INT_TRANS_C_FIFO_UNDERRUN)
 		if (intel_set_pch_fifo_underrun_reporting(dev, TRANSCODER_C,
 							  false))
-			DRM_DEBUG_DRIVER("PCH transcoder C FIFO underrun\n");
+			DRM_ERROR("PCH transcoder C FIFO underrun\n");
 
 	I915_WRITE(SERR_INT, serr_int);
 }
@@ -1644,6 +1678,8 @@ static void cpt_irq_handler(struct drm_device *dev, u32 pch_iir)
 		cpt_serr_int_handler(dev);
 }
 
+void intel_pipe_handle_vblank(struct drm_device *dev, enum pipe pipe);
+
 static void ilk_display_irq_handler(struct drm_device *dev, u32 de_iir)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
@@ -1659,13 +1695,15 @@ static void ilk_display_irq_handler(struct drm_device *dev, u32 de_iir)
 		DRM_ERROR("Poison interrupt\n");
 
 	for_each_pipe(pipe) {
-		if (de_iir & DE_PIPE_VBLANK(pipe))
+		if (de_iir & DE_PIPE_VBLANK(pipe)) {
+			intel_pipe_handle_vblank(dev, pipe);
+			ilk_update_pipe_wm(dev, pipe);
 			drm_handle_vblank(dev, pipe);
+		}
 
 		if (de_iir & DE_PIPE_FIFO_UNDERRUN(pipe))
 			if (intel_set_cpu_fifo_underrun_reporting(dev, pipe, false))
-				DRM_DEBUG_DRIVER("Pipe %c FIFO underrun\n",
-						 pipe_name(pipe));
+				DRM_ERROR("Pipe %c FIFO underrun\n", pipe_name(pipe));
 
 		if (de_iir & DE_PIPE_CRC_DONE(pipe))
 			i9xx_pipe_crc_irq_handler(dev, pipe);
@@ -1709,8 +1747,11 @@ static void ivb_display_irq_handler(struct drm_device *dev, u32 de_iir)
 		intel_opregion_asle_intr(dev);
 
 	for_each_pipe(i) {
-		if (de_iir & (DE_PIPE_VBLANK_IVB(i)))
+		if (de_iir & (DE_PIPE_VBLANK_IVB(i))) {
+			intel_pipe_handle_vblank(dev, i);
+			ilk_update_pipe_wm(dev, i);
 			drm_handle_vblank(dev, i);
+		}
 
 		/* plane/pipes map 1:1 on ilk+ */
 		if (de_iir & DE_PLANE_FLIP_DONE_IVB(i)) {
@@ -3046,6 +3087,7 @@ static void valleyview_irq_uninstall(struct drm_device *dev)
 	if (!dev_priv)
 		return;
 
+	del_timer_sync(&dev_priv->underrun_reenable_timer);
 	del_timer_sync(&dev_priv->hotplug_reenable_timer);
 
 	for_each_pipe(pipe)
@@ -3069,6 +3111,7 @@ static void ironlake_irq_uninstall(struct drm_device *dev)
 	if (!dev_priv)
 		return;
 
+	del_timer_sync(&dev_priv->underrun_reenable_timer);
 	del_timer_sync(&dev_priv->hotplug_reenable_timer);
 
 	I915_WRITE(HWSTAM, 0xffffffff);
@@ -3209,8 +3252,7 @@ static irqreturn_t i8xx_irq_handler(int irq, void *arg)
 			 */
 			if (pipe_stats[pipe] & 0x8000ffff) {
 				if (pipe_stats[pipe] & PIPE_FIFO_UNDERRUN_STATUS)
-					DRM_DEBUG_DRIVER("pipe %c underrun\n",
-							 pipe_name(pipe));
+					DRM_ERROR("pipe %c underrun\n", pipe_name(pipe));
 				I915_WRITE(reg, pipe_stats[pipe]);
 			}
 		}
@@ -3389,8 +3431,7 @@ static irqreturn_t i915_irq_handler(int irq, void *arg)
 			/* Clear the PIPE*STAT regs before the IIR */
 			if (pipe_stats[pipe] & 0x8000ffff) {
 				if (pipe_stats[pipe] & PIPE_FIFO_UNDERRUN_STATUS)
-					DRM_DEBUG_DRIVER("pipe %c underrun\n",
-							 pipe_name(pipe));
+					DRM_ERROR("pipe %c underrun\n", pipe_name(pipe));
 				I915_WRITE(reg, pipe_stats[pipe]);
 				irq_received = true;
 			}
@@ -3469,6 +3510,7 @@ static void i915_irq_uninstall(struct drm_device * dev)
 	drm_i915_private_t *dev_priv = (drm_i915_private_t *) dev->dev_private;
 	int pipe;
 
+	del_timer_sync(&dev_priv->underrun_reenable_timer);
 	del_timer_sync(&dev_priv->hotplug_reenable_timer);
 
 	if (I915_HAS_HOTPLUG(dev)) {
@@ -3636,8 +3678,7 @@ static irqreturn_t i965_irq_handler(int irq, void *arg)
 			 */
 			if (pipe_stats[pipe] & 0x8000ffff) {
 				if (pipe_stats[pipe] & PIPE_FIFO_UNDERRUN_STATUS)
-					DRM_DEBUG_DRIVER("pipe %c underrun\n",
-							 pipe_name(pipe));
+					DRM_ERROR("pipe %c underrun\n", pipe_name(pipe));
 				I915_WRITE(reg, pipe_stats[pipe]);
 				irq_received = 1;
 			}
@@ -3728,6 +3769,7 @@ static void i965_irq_uninstall(struct drm_device * dev)
 	if (!dev_priv)
 		return;
 
+	del_timer_sync(&dev_priv->underrun_reenable_timer);
 	del_timer_sync(&dev_priv->hotplug_reenable_timer);
 
 	I915_WRITE(PORT_HOTPLUG_EN, 0);
@@ -3789,6 +3831,9 @@ void intel_irq_init(struct drm_device *dev)
 	INIT_WORK(&dev_priv->rps.work, gen6_pm_rps_work);
 	INIT_WORK(&dev_priv->l3_parity.error_work, ivybridge_parity_work);
 
+	setup_timer(&dev_priv->underrun_reenable_timer,
+		    i915_underrun_reenable,
+		    (unsigned long) dev);
 	setup_timer(&dev_priv->gpu_error.hangcheck_timer,
 		    i915_hangcheck_elapsed,
 		    (unsigned long) dev);

@@ -324,6 +324,10 @@ struct intel_pipe_wm {
 	struct intel_wm_level wm[5];
 	uint32_t linetime;
 	bool fbc_wm_enabled;
+	bool pipe_enabled;
+	bool primary_enabled;
+	bool sprites_enabled;
+	bool sprites_scaled;
 };
 
 struct intel_crtc {
@@ -376,9 +380,18 @@ struct intel_crtc {
 
 	/* per-pipe watermark state */
 	struct {
+		/* watermarks queued for next vblank */
+		struct intel_pipe_wm pending;
 		/* watermarks currently being used  */
 		struct intel_pipe_wm active;
+		/* indicates that 'pending' contains changed watermarks */
+		bool dirty;
+		/* watermark update has a vblank reference? */
+		bool vblank;
 	} wm;
+
+	wait_queue_head_t vbl_wait;
+	bool vbl_received;
 
 	/* Flag to schedule the sprite disable to corresponding flip */
 	bool disable_sprite;
@@ -418,7 +431,8 @@ struct intel_plane {
 			     int crtc_x, int crtc_y,
 			     unsigned int crtc_w, unsigned int crtc_h,
 			     uint32_t x, uint32_t y,
-			     uint32_t src_w, uint32_t src_h);
+			     uint32_t src_w, uint32_t src_h,
+			     bool disable_primary);
 	void (*disable_plane)(struct drm_plane *plane,
 			      struct drm_crtc *crtc);
 	int (*update_colorkey)(struct drm_plane *plane,
@@ -602,6 +616,7 @@ void snb_enable_pm_irq(struct drm_i915_private *dev_priv, uint32_t mask);
 void snb_disable_pm_irq(struct drm_i915_private *dev_priv, uint32_t mask);
 void hsw_pc8_disable_interrupts(struct drm_device *dev);
 void hsw_pc8_restore_interrupts(struct drm_device *dev);
+int i915_get_crtc_vpos(struct drm_crtc *crtc);
 
 
 /* intel_crt.c */
@@ -846,7 +861,10 @@ void intel_update_watermarks(struct drm_crtc *crtc);
 void intel_update_sprite_watermarks(struct drm_plane *plane,
 				    struct drm_crtc *crtc,
 				    uint32_t sprite_width, int pixel_size,
-				    bool enabled, bool scaled);
+				    bool enabled, bool scaled,
+				    struct intel_pipe_wm *pipe_wm);
+void intel_program_watermarks(struct drm_crtc *crtc,
+			      const struct intel_pipe_wm *pipe_wm);
 void intel_init_pm(struct drm_device *dev);
 bool intel_fbc_enabled(struct drm_device *dev);
 void intel_update_fbc(struct drm_device *dev);
@@ -873,6 +891,8 @@ void gen6_rps_boost(struct drm_i915_private *dev_priv);
 void intel_aux_display_runtime_get(struct drm_i915_private *dev_priv);
 void intel_aux_display_runtime_put(struct drm_i915_private *dev_priv);
 void ilk_wm_get_hw_state(struct drm_device *dev);
+void ilk_update_pipe_wm(struct drm_device *dev, enum pipe pipe);
+bool ilk_disable_lp_wm(struct drm_device *dev);
 
 
 /* intel_sdvo.c */

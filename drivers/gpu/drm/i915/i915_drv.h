@@ -369,6 +369,7 @@ struct intel_crtc_config;
 struct intel_crtc;
 struct intel_limit;
 struct dpll;
+struct intel_pipe_wm;
 
 struct drm_i915_display_funcs {
 	bool (*fbc_enabled)(struct drm_device *dev);
@@ -398,7 +399,10 @@ struct drm_i915_display_funcs {
 	void (*update_sprite_wm)(struct drm_plane *plane,
 				 struct drm_crtc *crtc,
 				 uint32_t sprite_width, int pixel_size,
-				 bool enable, bool scaled);
+				 bool enable, bool scaled,
+				 struct intel_pipe_wm *pipe_wm);
+	void (*program_wm)(struct drm_crtc *crtc,
+			   const struct intel_pipe_wm *pipe_wm);
 	void (*modeset_global_resources)(struct drm_device *dev);
 	/* Returns the active state of the crtc, and if the crtc is active,
 	 * fills out the pipe-config with the hw state. */
@@ -1384,6 +1388,7 @@ typedef struct drm_i915_private {
 	} hpd_stats[HPD_NUM_PINS];
 	u32 hpd_event_bits;
 	struct timer_list hotplug_reenable_timer;
+	struct timer_list underrun_reenable_timer;
 
 	int num_plane;
 
@@ -1518,6 +1523,8 @@ typedef struct drm_i915_private {
 		/* cursor */
 		uint16_t cur_latency[5];
 
+		/* protects all watermark state */
+		spinlock_t lock;
 		/* current hardware state */
 		struct hsw_wm_values hw;
 	} wm;
@@ -1928,6 +1935,8 @@ extern bool i915_fastboot __read_mostly;
 extern int i915_enable_pc8 __read_mostly;
 extern int i915_pc8_timeout __read_mostly;
 extern bool i915_prefault_disable __read_mostly;
+extern unsigned int i915_ivb_sprite_fix __read_mostly;
+extern int i915_wm_max_level __read_mostly;
 extern int i915_enable_cmd_parser __read_mostly;
 extern int i915_enable_kernel_batch_copy __read_mostly;
 

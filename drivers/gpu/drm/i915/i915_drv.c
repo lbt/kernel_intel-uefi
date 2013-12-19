@@ -38,6 +38,17 @@
 #include <linux/module.h>
 #include <drm/drm_crtc_helper.h>
 
+int i915_wm_max_level __read_mostly = -1;
+module_param_named(wm_max_level, i915_wm_max_level, int, 0600);
+MODULE_PARM_DESC(wm_max_level,
+		"Maximum watermak level for ILK+, "
+		 "0-n max level, -1=use hardware default [default]");
+
+unsigned int i915_ivb_sprite_fix __read_mostly = 1;
+module_param_named(ivb_sprite_fix, i915_ivb_sprite_fix, int, 0600);
+MODULE_PARM_DESC(ivb_sprite_fix,
+		"Wait for vblank between disabling LP1+ and enabling sprite scaling on IVB (default: true)");
+
 static int i915_modeset __read_mostly = -1;
 module_param_named(modeset, i915_modeset, int, 0400);
 MODULE_PARM_DESC(modeset,
