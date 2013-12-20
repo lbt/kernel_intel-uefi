@@ -223,7 +223,7 @@ int radeon_info_ioctl(struct drm_device *dev, void *data, struct drm_file *filp)
 			*value = rdev->accel_working;
 		break;
 	case RADEON_INFO_CRTC_FROM_ID:
-		if (DRM_COPY_FROM_USER(value, value_ptr, sizeof(uint32_t))) {
+		if (copy_from_user(value, value_ptr, sizeof(uint32_t))) {
 			DRM_ERROR("copy_from_user %s:%u\n", __func__, __LINE__);
 			return -EFAULT;
 		}
@@ -269,7 +269,7 @@ int radeon_info_ioctl(struct drm_device *dev, void *data, struct drm_file *filp)
 		 *
 		 * When returning, the value is 1 if filp owns hyper-z access,
 		 * 0 otherwise. */
-		if (DRM_COPY_FROM_USER(value, value_ptr, sizeof(uint32_t))) {
+		if (copy_from_user(value, value_ptr, sizeof(uint32_t))) {
 			DRM_ERROR("copy_from_user %s:%u\n", __func__, __LINE__);
 			return -EFAULT;
 		}
@@ -281,7 +281,7 @@ int radeon_info_ioctl(struct drm_device *dev, void *data, struct drm_file *filp)
 		break;
 	case RADEON_INFO_WANT_CMASK:
 		/* The same logic as Hyper-Z. */
-		if (DRM_COPY_FROM_USER(value, value_ptr, sizeof(uint32_t))) {
+		if (copy_from_user(value, value_ptr, sizeof(uint32_t))) {
 			DRM_ERROR("copy_from_user %s:%u\n", __func__, __LINE__);
 			return -EFAULT;
 		}
@@ -340,7 +340,7 @@ int radeon_info_ioctl(struct drm_device *dev, void *data, struct drm_file *filp)
 		break;
 	case RADEON_INFO_BACKEND_MAP:
 		if (rdev->family >= CHIP_BONAIRE)
-			return -EINVAL;
+			*value = rdev->config.cik.backend_map;
 		else if (rdev->family >= CHIP_TAHITI)
 			*value = rdev->config.si.backend_map;
 		else if (rdev->family >= CHIP_CAYMAN)
@@ -417,7 +417,7 @@ int radeon_info_ioctl(struct drm_device *dev, void *data, struct drm_file *filp)
 		*value = rdev->fastfb_working;
 		break;
 	case RADEON_INFO_RING_WORKING:
-		if (DRM_COPY_FROM_USER(value, value_ptr, sizeof(uint32_t))) {
+		if (copy_from_user(value, value_ptr, sizeof(uint32_t))) {
 			DRM_ERROR("copy_from_user %s:%u\n", __func__, __LINE__);
 			return -EFAULT;
 		}
@@ -449,6 +449,15 @@ int radeon_info_ioctl(struct drm_device *dev, void *data, struct drm_file *filp)
 			return -EINVAL;
 		}
 		break;
+	case RADEON_INFO_CIK_MACROTILE_MODE_ARRAY:
+		if (rdev->family >= CHIP_BONAIRE) {
+			value = rdev->config.cik.macrotile_mode_array;
+			value_size = sizeof(uint32_t)*16;
+		} else {
+			DRM_DEBUG_KMS("macrotile mode array is cik+ only!\n");
+			return -EINVAL;
+		}
+		break;
 	case RADEON_INFO_SI_CP_DMA_COMPUTE:
 		*value = 1;
 		break;
@@ -456,7 +465,7 @@ int radeon_info_ioctl(struct drm_device *dev, void *data, struct drm_file *filp)
 		DRM_DEBUG_KMS("Invalid request %d\n", info->request);
 		return -EINVAL;
 	}
-	if (DRM_COPY_TO_USER(value_ptr, (char*)value, value_size)) {
+	if (copy_to_user(value_ptr, (char*)value, value_size)) {
 		DRM_ERROR("copy_to_user %s:%u\n", __func__, __LINE__);
 		return -EFAULT;
 	}

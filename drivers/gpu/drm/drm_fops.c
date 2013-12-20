@@ -147,7 +147,7 @@ int drm_stub_open(struct inode *inode, struct file *filp)
 	struct drm_minor *minor;
 	int minor_id = iminor(inode);
 	int err = -ENODEV;
-	const struct file_operations *old_fops;
+	const struct file_operations *new_fops;
 
 	DRM_DEBUG("\n");
 
@@ -162,18 +162,13 @@ int drm_stub_open(struct inode *inode, struct file *filp)
 	if (drm_device_is_unplugged(dev))
 		goto out;
 
-	old_fops = filp->f_op;
-	filp->f_op = fops_get(dev->driver->fops);
-	if (filp->f_op == NULL) {
-		filp->f_op = old_fops;
+	new_fops = fops_get(dev->driver->fops);
+	if (!new_fops)
 		goto out;
-	}
-	if (filp->f_op->open && (err = filp->f_op->open(inode, filp))) {
-		fops_put(filp->f_op);
-		filp->f_op = fops_get(old_fops);
-	}
-	fops_put(old_fops);
 
+	replace_fops(filp, new_fops);
+	if (filp->f_op->open)
+		err = filp->f_op->open(inode, filp);
 out:
 	mutex_unlock(&drm_global_mutex);
 	return err;
@@ -237,7 +232,6 @@ static int drm_open_helper(struct inode *inode, struct file *filp,
 		goto out_put_pid;
 	}
 
-	priv->ioctl_count = 0;
 	/* for compatibility root is always authenticated */
 	priv->always_authenticated = capable(CAP_SYS_ADMIN);
 	priv->authenticated = priv->always_authenticated;
@@ -396,9 +390,6 @@ static void drm_legacy_dev_reinit(struct drm_device *dev)
 {
 	if (drm_core_check_feature(dev, DRIVER_MODESET))
 		return;
-
-	atomic_set(&dev->ioctl_count, 0);
-	atomic_set(&dev->vma_count, 0);
 
 	dev->sigdata.lock = NULL;
 
@@ -583,12 +574,7 @@ int drm_release(struct inode *inode, struct file *filp)
 	 */
 
 	if (!--dev->open_count) {
-		if (atomic_read(&dev->ioctl_count)) {
-			DRM_ERROR("Device busy: %d\n",
-				  atomic_read(&dev->ioctl_count));
-			retcode = -EBUSY;
-		} else
-			retcode = drm_lastclose(dev);
+		retcode = drm_lastclose(dev);
 		if (drm_device_is_unplugged(dev))
 			drm_put_dev(dev);
 	}

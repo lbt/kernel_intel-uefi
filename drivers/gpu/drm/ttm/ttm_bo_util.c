@@ -350,10 +350,13 @@ int ttm_bo_move_memcpy(struct ttm_buffer_object *bo,
 		goto out2;
 
 	/*
-	 * Move nonexistent data. NOP.
+	 * Don't move nonexistent data. Clear destination instead.
 	 */
-	if (old_iomap == NULL && ttm == NULL)
+	if (old_iomap == NULL &&
+	    (ttm == NULL || ttm->state == tt_unpopulated)) {
+		memset_io(new_iomap, 0, new_mem->num_pages*PAGE_SIZE);
 		goto out2;
+	}
 
 	/*
 	 * TTM might be null for moves within the same region.
@@ -590,7 +593,7 @@ int ttm_bo_kmap(struct ttm_buffer_object *bo,
 	if (start_page > bo->num_pages)
 		return -EINVAL;
 #if 0
-	if (num_pages > 1 && !DRM_SUSER(DRM_CURPROC))
+	if (num_pages > 1 && !capable(CAP_SYS_ADMIN))
 		return -EPERM;
 #endif
 	(void) ttm_mem_io_lock(man, false);

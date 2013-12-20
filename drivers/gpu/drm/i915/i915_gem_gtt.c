@@ -57,7 +57,9 @@ typedef gen8_gtt_pte_t gen8_ppgtt_pde_t;
 #define HSW_WB_LLC_AGE3			HSW_CACHEABILITY_CONTROL(0x2)
 #define HSW_WB_LLC_AGE0			HSW_CACHEABILITY_CONTROL(0x3)
 #define HSW_WB_ELLC_LLC_AGE0		HSW_CACHEABILITY_CONTROL(0xb)
+#define HSW_WB_ELLC_LLC_AGE3		HSW_CACHEABILITY_CONTROL(0x8)
 #define HSW_WT_ELLC_LLC_AGE0		HSW_CACHEABILITY_CONTROL(0x6)
+#define HSW_WT_ELLC_LLC_AGE3		HSW_CACHEABILITY_CONTROL(0x7)
 
 #define GEN8_PTES_PER_PAGE		(PAGE_SIZE / sizeof(gen8_gtt_pte_t))
 #define GEN8_PDES_PER_PAGE		(PAGE_SIZE / sizeof(gen8_ppgtt_pde_t))
@@ -185,10 +187,10 @@ static gen6_gtt_pte_t iris_pte_encode(dma_addr_t addr,
 	case I915_CACHE_NONE:
 		break;
 	case I915_CACHE_WT:
-		pte |= HSW_WT_ELLC_LLC_AGE0;
+		pte |= HSW_WT_ELLC_LLC_AGE3;
 		break;
 	default:
-		pte |= HSW_WB_ELLC_LLC_AGE0;
+		pte |= HSW_WB_ELLC_LLC_AGE3;
 		break;
 	}
 
@@ -238,10 +240,16 @@ static int gen8_ppgtt_enable(struct drm_device *dev)
 		for_each_ring(ring, dev_priv, j) {
 			ret = gen8_write_pdp(ring, i, addr);
 			if (ret)
-				return ret;
+				goto err_out;
 		}
 	}
 	return 0;
+
+err_out:
+	for_each_ring(ring, dev_priv, j)
+		I915_WRITE(RING_MODE_GEN7(ring),
+			   _MASKED_BIT_DISABLE(GFX_PPGTT_ENABLE));
+	return ret;
 }
 
 static void gen8_ppgtt_clear_range(struct i915_address_space *vm,
@@ -316,6 +324,8 @@ static void gen8_ppgtt_cleanup(struct i915_address_space *vm)
 		container_of(vm, struct i915_hw_ppgtt, base);
 	int i, j;
 
+	drm_mm_takedown(&vm->mm);
+
 	for (i = 0; i < ppgtt->num_pd_pages ; i++) {
 		if (ppgtt->pd_dma_addr[i]) {
 			pci_unmap_page(ppgtt->base.dev->pdev,
@@ -335,8 +345,8 @@ static void gen8_ppgtt_cleanup(struct i915_address_space *vm)
 		kfree(ppgtt->gen8_pt_dma_addr[i]);
 	}
 
-	__free_pages(ppgtt->gen8_pt_pages, ppgtt->num_pt_pages << PAGE_SHIFT);
-	__free_pages(ppgtt->pd_pages, ppgtt->num_pd_pages << PAGE_SHIFT);
+	__free_pages(ppgtt->gen8_pt_pages, get_order(ppgtt->num_pt_pages << PAGE_SHIFT));
+	__free_pages(ppgtt->pd_pages, get_order(ppgtt->num_pd_pages << PAGE_SHIFT));
 }
 
 /**
@@ -379,6 +389,8 @@ static int gen8_ppgtt_init(struct i915_hw_ppgtt *ppgtt, uint64_t size)
 	ppgtt->base.clear_range = gen8_ppgtt_clear_range;
 	ppgtt->base.insert_entries = gen8_ppgtt_insert_entries;
 	ppgtt->base.cleanup = gen8_ppgtt_cleanup;
+	ppgtt->base.start = 0;
+	ppgtt->base.total = ppgtt->num_pt_pages * GEN8_PTES_PER_PAGE * PAGE_SIZE;
 
 	BUG_ON(ppgtt->num_pd_pages > GEN8_LEGACY_PDPS);
 
@@ -630,6 +642,8 @@ static int gen6_ppgtt_init(struct i915_hw_ppgtt *ppgtt)
 	ppgtt->base.insert_entries = gen6_ppgtt_insert_entries;
 	ppgtt->base.cleanup = gen6_ppgtt_cleanup;
 	ppgtt->base.scratch = dev_priv->gtt.base.scratch;
+	ppgtt->base.start = 0;
+	ppgtt->base.total = GEN6_PPGTT_PD_ENTRIES * I915_PPGTT_PT_ENTRIES * PAGE_SIZE;
 	ppgtt->pt_pages = kcalloc(ppgtt->num_pd_entries, sizeof(struct page *),
 				  GFP_KERNEL);
 	if (!ppgtt->pt_pages)
@@ -1124,7 +1138,6 @@ void i915_gem_setup_global_gtt(struct drm_device *dev,
 		if (ret)
 			DRM_DEBUG_KMS("Reservation failed\n");
 		obj->has_global_gtt_mapping = 1;
-		list_add(&vma->vma_link, &obj->vma_list);
 	}
 
 	dev_priv->gtt.base.start = start;
@@ -1239,6 +1252,11 @@ static inline unsigned int gen8_get_total_gtt_size(u16 bdw_gmch_ctl)
 	bdw_gmch_ctl &= BDW_GMCH_GGMS_MASK;
 	if (bdw_gmch_ctl)
 		bdw_gmch_ctl = 1 << bdw_gmch_ctl;
+	if (bdw_gmch_ctl > 4) {
+		WARN_ON(!i915_preliminary_hw_support);
+		return 4<<20;
+	}
+
 	return bdw_gmch_ctl << 20;
 }
 
@@ -1395,6 +1413,8 @@ static void gen6_gmch_remove(struct i915_address_space *vm)
 {
 
 	struct i915_gtt *gtt = container_of(vm, struct i915_gtt, base);
+
+	drm_mm_takedown(&vm->mm);
 	iounmap(gtt->gsm);
 	teardown_scratch_page(vm->dev);
 }

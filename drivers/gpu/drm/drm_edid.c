@@ -1329,7 +1329,7 @@ static u32 edid_get_quirks(struct edid *edid)
 }
 
 #define MODE_SIZE(m) ((m)->hdisplay * (m)->vdisplay)
-#define MODE_REFRESH_DIFF(m,r) (abs((m)->vrefresh - target_refresh))
+#define MODE_REFRESH_DIFF(c,t) (abs((c) - (t)))
 
 /**
  * edid_fixup_preferred - set preferred modes based on quirk list
@@ -1344,6 +1344,7 @@ static void edid_fixup_preferred(struct drm_connector *connector,
 {
 	struct drm_display_mode *t, *cur_mode, *preferred_mode;
 	int target_refresh = 0;
+	int cur_vrefresh, preferred_vrefresh;
 
 	if (list_empty(&connector->probed_modes))
 		return;
@@ -1366,10 +1367,14 @@ static void edid_fixup_preferred(struct drm_connector *connector,
 		if (MODE_SIZE(cur_mode) > MODE_SIZE(preferred_mode))
 			preferred_mode = cur_mode;
 
+		cur_vrefresh = cur_mode->vrefresh ?
+			cur_mode->vrefresh : drm_mode_vrefresh(cur_mode);
+		preferred_vrefresh = preferred_mode->vrefresh ?
+			preferred_mode->vrefresh : drm_mode_vrefresh(preferred_mode);
 		/* At a given size, try to get closest to target refresh */
 		if ((MODE_SIZE(cur_mode) == MODE_SIZE(preferred_mode)) &&
-		    MODE_REFRESH_DIFF(cur_mode, target_refresh) <
-		    MODE_REFRESH_DIFF(preferred_mode, target_refresh)) {
+		    MODE_REFRESH_DIFF(cur_vrefresh, target_refresh) <
+		    MODE_REFRESH_DIFF(preferred_vrefresh, target_refresh)) {
 			preferred_mode = cur_mode;
 		}
 	}
@@ -2669,7 +2674,7 @@ static int add_3d_struct_modes(struct drm_connector *connector, u16 structure,
 	int modes = 0;
 	u8 cea_mode;
 
-	if (video_db == NULL || video_index > video_len)
+	if (video_db == NULL || video_index >= video_len)
 		return 0;
 
 	/* CEA modes are numbered 1..127 */
@@ -2696,7 +2701,7 @@ static int add_3d_struct_modes(struct drm_connector *connector, u16 structure,
 	if (structure & (1 << 8)) {
 		newmode = drm_mode_duplicate(dev, &edid_cea_modes[cea_mode]);
 		if (newmode) {
-			newmode->flags = DRM_MODE_FLAG_3D_SIDE_BY_SIDE_HALF;
+			newmode->flags |= DRM_MODE_FLAG_3D_SIDE_BY_SIDE_HALF;
 			drm_mode_probed_add(connector, newmode);
 			modes++;
 		}

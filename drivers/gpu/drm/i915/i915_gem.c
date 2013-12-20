@@ -4436,10 +4436,9 @@ i915_gem_init_hw(struct drm_device *dev)
 	if (dev_priv->ellc_size)
 		I915_WRITE(HSW_IDICR, I915_READ(HSW_IDICR) | IDIHASHMSK(0xf));
 
-	if (IS_HSW_GT3(dev))
-		I915_WRITE(MI_PREDICATE_RESULT_2, LOWER_SLICE_ENABLED);
-	else
-		I915_WRITE(MI_PREDICATE_RESULT_2, LOWER_SLICE_DISABLED);
+	if (IS_HASWELL(dev))
+		I915_WRITE(MI_PREDICATE_RESULT_2, IS_HSW_GT3(dev) ?
+			   LOWER_SLICE_ENABLED : LOWER_SLICE_DISABLED);
 
 	if (HAS_PCH_NOP(dev)) {
 		u32 temp = I915_READ(GEN7_MSG_CTL);
@@ -4460,7 +4459,13 @@ i915_gem_init_hw(struct drm_device *dev)
 	 * XXX: There was some w/a described somewhere suggesting loading
 	 * contexts before PPGTT.
 	 */
-	i915_gem_context_init(dev);
+	ret = i915_gem_context_init(dev);
+	if (ret) {
+		i915_gem_cleanup_ringbuffer(dev);
+		DRM_ERROR("Context initialization failed %d\n", ret);
+		return ret;
+	}
+
 	if (dev_priv->mm.aliasing_ppgtt) {
 		ret = dev_priv->mm.aliasing_ppgtt->enable(dev);
 		if (ret) {

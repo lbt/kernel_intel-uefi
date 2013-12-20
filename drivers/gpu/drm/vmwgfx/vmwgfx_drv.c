@@ -453,12 +453,13 @@ static void vmw_get_initial_size(struct vmw_private *dev_priv)
  */
 static int vmw_dma_select_mode(struct vmw_private *dev_priv)
 {
-	const struct dma_map_ops *dma_ops = get_dma_ops(dev_priv->dev->dev);
 	static const char *names[vmw_dma_map_max] = {
 		[vmw_dma_phys] = "Using physical TTM page addresses.",
 		[vmw_dma_alloc_coherent] = "Using coherent TTM pages.",
 		[vmw_dma_map_populate] = "Keeping DMA mappings.",
 		[vmw_dma_map_bind] = "Giving up DMA mappings early."};
+#ifdef CONFIG_X86
+	const struct dma_map_ops *dma_ops = get_dma_ops(dev_priv->dev->dev);
 
 #ifdef CONFIG_INTEL_IOMMU
 	if (intel_iommu_enabled) {
@@ -499,6 +500,10 @@ out_fixup:
 	if (dev_priv->map_mode == vmw_dma_alloc_coherent)
 		return -EINVAL;
 #endif
+
+#else /* CONFIG_X86 */
+	dev_priv->map_mode = vmw_dma_map_populate;
+#endif /* CONFIG_X86 */
 
 	DRM_INFO("DMA map mode: %s\n", names[dev_priv->map_mode]);
 
@@ -672,7 +677,7 @@ static int vmw_driver_load(struct drm_device *dev, unsigned long chipset)
 	}
 
 	dev_priv->tdev = ttm_object_device_init
-	    (dev_priv->mem_global_ref.object, 12);
+		(dev_priv->mem_global_ref.object, 12, &vmw_prime_dmabuf_ops);
 
 	if (unlikely(dev_priv->tdev == NULL)) {
 		DRM_ERROR("Unable to initialize TTM object management.\n");
@@ -1205,7 +1210,7 @@ static const struct file_operations vmwgfx_driver_fops = {
 
 static struct drm_driver driver = {
 	.driver_features = DRIVER_HAVE_IRQ | DRIVER_IRQ_SHARED |
-	DRIVER_MODESET,
+	DRIVER_MODESET | DRIVER_PRIME,
 	.load = vmw_driver_load,
 	.unload = vmw_driver_unload,
 	.lastclose = vmw_lastclose,
@@ -1229,6 +1234,9 @@ static struct drm_driver driver = {
 	.dumb_create = vmw_dumb_create,
 	.dumb_map_offset = vmw_dumb_map_offset,
 	.dumb_destroy = vmw_dumb_destroy,
+
+	.prime_fd_to_handle = vmw_prime_fd_to_handle,
+	.prime_handle_to_fd = vmw_prime_handle_to_fd,
 
 	.fops = &vmwgfx_driver_fops,
 	.name = VMWGFX_DRIVER_NAME,
