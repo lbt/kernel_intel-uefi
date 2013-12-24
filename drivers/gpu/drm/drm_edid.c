@@ -2437,6 +2437,21 @@ u8 drm_match_cea_mode(const struct drm_display_mode *to_match)
 }
 EXPORT_SYMBOL(drm_match_cea_mode);
 
+/**
+ * drm_get_cea_aspect_ratio - get the picture aspect ratio corresponding to
+ * the input VIC from the CEA mode list
+ *
+ * Returns picture aspect ratio
+ */
+enum hdmi_picture_aspect drm_get_cea_aspect_ratio(const u8 video_code)
+{
+	/* return picture aspect ratio for video_code - 1 to access the
+	 * right array element
+	*/
+	return edid_cea_modes[video_code-1].picture_aspect_ratio;
+}
+EXPORT_SYMBOL(drm_get_cea_aspect_ratio);
+
 /*
  * Calculate the alternate clock for HDMI modes (those from the HDMI vendor
  * specific block).
@@ -3527,6 +3542,25 @@ drm_hdmi_avi_infoframe_from_display_mode(struct hdmi_avi_infoframe *frame,
 	frame->video_code = drm_match_cea_mode(mode);
 
 	frame->picture_aspect = HDMI_PICTURE_ASPECT_NONE;
+
+	/* Populate picture aspect ratio from either CEA mode list or
+	 *  user input
+	*/
+	if (mode->picture_aspect_ratio == HDMI_PICTURE_ASPECT_4_3 ||
+		mode->picture_aspect_ratio == HDMI_PICTURE_ASPECT_16_9)
+		frame->picture_aspect = mode->picture_aspect_ratio;
+	else if (frame->video_code > 0)
+		frame->picture_aspect = drm_get_cea_aspect_ratio(
+						frame->video_code);
+	else {
+		if (!(mode->vdisplay % 3) &&
+			(((mode->vdisplay * 4) / 3) == mode->hdisplay))
+			frame->picture_aspect = HDMI_PICTURE_ASPECT_4_3;
+		else if (!(mode->vdisplay % 9) &&
+			(((mode->vdisplay * 16) / 9) == mode->hdisplay))
+			frame->picture_aspect = HDMI_PICTURE_ASPECT_16_9;
+	}
+
 	frame->active_aspect = HDMI_ACTIVE_ASPECT_PICTURE;
 
 	return 0;
