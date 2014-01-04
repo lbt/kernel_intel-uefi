@@ -1746,6 +1746,9 @@ static void ivb_display_irq_handler(struct drm_device *dev, u32 de_iir)
 	if (de_iir & DE_GSE_IVB)
 		intel_opregion_asle_intr(dev);
 
+	if (de_iir & DE_DPST_HISTOGRAM_IVB)
+		i915_dpst_irq_handler(dev);
+
 	for_each_pipe(i) {
 		if (de_iir & (DE_PIPE_VBLANK_IVB(i))) {
 			intel_pipe_handle_vblank(dev, i);
@@ -2874,6 +2877,9 @@ static int ironlake_irq_postinstall(struct drm_device *dev)
 				DE_ERR_INT_IVB);
 		extra_mask = (DE_PIPEC_VBLANK_IVB | DE_PIPEB_VBLANK_IVB |
 			      DE_PIPEA_VBLANK_IVB);
+
+		if (I915_HAS_DPST(dev))
+			display_mask |= DE_DPST_HISTOGRAM_IVB;
 
 		I915_WRITE(GEN7_ERR_INT, I915_READ(GEN7_ERR_INT));
 	} else {

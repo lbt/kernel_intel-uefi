@@ -1006,6 +1006,9 @@ static int i915_getparam(struct drm_device *dev, void *data,
 	case I915_PARAM_HAS_CMD_PARSER:
 		value = 1;
 		break;
+	case I915_PARAM_HAS_DPST:
+		value = I915_HAS_DPST(dev);
+		break;
 	default:
 		DRM_DEBUG("Unknown parameter %d\n", param->param);
 		return -EINVAL;
@@ -1547,6 +1550,7 @@ int i915_driver_load(struct drm_device *dev, unsigned long flags)
 	mutex_init(&dev_priv->dpio_lock);
 	mutex_init(&dev_priv->rps.hw_lock);
 	mutex_init(&dev_priv->modeset_restore_lock);
+	mutex_init(&dev_priv->dpst.ioctl_lock);
 
 	mutex_init(&dev_priv->pc8.lock);
 	dev_priv->pc8.requirements_met = false;
@@ -1967,6 +1971,7 @@ const struct drm_ioctl_desc i915_ioctls[] = {
 	DRM_IOCTL_DEF_DRV(I915_GET_RESET_STATS, i915_get_reset_stats_ioctl, DRM_UNLOCKED|DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(I915_ENABLE_PLANE_RESERVED_REG_BIT_2,
 		i915_enable_plane_reserved_reg_bit_2, DRM_AUTH|DRM_UNLOCKED|DRM_RENDER_ALLOW),
+	DRM_IOCTL_DEF_DRV(I915_DPST_CONTEXT, i915_dpst_context, DRM_UNLOCKED),
 	DRM_IOCTL_DEF_DRV(I915_GEM_ACCESS_USERDATA, i915_gem_access_userdata,
 							DRM_UNLOCKED|DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(I915_SET_CSC, intel_configure_csc, DRM_UNLOCKED|DRM_RENDER_ALLOW),
