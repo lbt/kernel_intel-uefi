@@ -250,13 +250,12 @@ typedef struct _drm_i915_sarea {
 #define DRM_I915_GEM_SET_CACHING	0x2f
 #define DRM_I915_GEM_GET_CACHING	0x30
 #define DRM_I915_REG_READ		0x31
-#define DRM_I915_ENABLE_PLANE_RESERVED_REG_BIT_2	0x37
 #define DRM_I915_SET_PLANE_ZORDER	0x32
 #define DRM_I915_EDP_PSR_CTL            0x33
 #define DRM_I915_EDP_PSR_EXIT           0x34
 #define DRM_I915_DISP_SCREEN_CONTROL	0x35
 #define DRM_I915_SET_PLANE_180_ROTATION 0x36
-#define DRM_I915_SET_RESERVED_REG_BIT_2	0x37
+#define DRM_I915_ENABLE_PLANE_RESERVED_REG_BIT_2	0x37
 #define DRM_I915_GEM_USERPTR		0x38
 #define DRM_I915_SET_CSC                0x39
 #define DRM_I915_GET_PSR_SUPPORT	0X3a
@@ -325,9 +324,6 @@ typedef struct _drm_i915_sarea {
 #define DRM_IOCTL_I915_DISP_SCREEN_CONTROL             \
 		DRM_IOW(DRM_COMMAND_BASE + DRM_I915_DISP_SCREEN_CONTROL, \
 		struct drm_i915_disp_screen_control)
-#define DRM_IOCTL_I915_RESERVED_REG_BIT_2		\
-		DRM_IOW(DRM_COMMAND_BASE + DRM_I915_SET_RESERVED_REG_BIT_2, \
-		struct drm_i915_set_reserved_reg_bit_2)
 #define DRM_IOCTL_I915_SET_CSC DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_SET_CSC, \
 		struct CSC_Coeff)
 #define DRM_IOCTL_I915_GET_PSR_SUPPORT	DRM_IOR(DRM_COMMAND_BASE + \
@@ -1132,6 +1128,8 @@ struct drm_i915_enable_plane_reserved_reg_bit_2 {
 	__u32 enable;
 	int plane;
 	int crtc_id;
+};
+
 struct drm_i915_set_plane_zorder {
 	__u32 order;
 };
@@ -1139,11 +1137,6 @@ struct drm_i915_set_plane_zorder {
 struct drm_i915_disp_screen_control {
 	__u32 on_off_cntrl;
 	__u32 crtc_id;
-};
-
-struct drm_i915_reserved_reg_bit_2 {
-	__u32 enable;
-	int plane;
 };
 
 struct drm_i915_plane_180_rotation {
