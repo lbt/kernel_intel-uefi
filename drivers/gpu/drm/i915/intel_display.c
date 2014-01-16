@@ -2038,50 +2038,6 @@ void intel_unpin_fb_obj(struct drm_i915_gem_object *obj)
 	i915_gem_object_unpin_from_display_plane(obj);
 }
 
-int i915_enable_plane_reserved_reg_bit_2(struct drm_device *dev, void *data,
-				 struct drm_file *file)
-{
-	struct drm_i915_private *dev_priv = dev->dev_private;
-	struct drm_i915_reserved_reg_bit_2 *rrb = data;
-	u32 enable = rrb->enable;
-	int plane = rrb->plane;
-	u32 val;
-
-	/* Clear the older rrb setting*/
-	val = I915_READ(DSPSURF(plane));
-	val &= ~PLANE_RESERVED_REG_BIT_2_ENABLE;
-	I915_WRITE(DSPSURF(plane), val);
-
-	val = I915_READ(DSPSURFLIVE(plane));
-	val &= ~PLANE_RESERVED_REG_BIT_2_ENABLE;
-	I915_WRITE(DSPSURFLIVE(plane), val);
-
-	if (plane == 1 || plane == 4) {
-		val = I915_READ(VLV_DSPADDR(plane));
-		val &= ~PLANE_RESERVED_REG_BIT_2_ENABLE;
-		I915_WRITE(VLV_DSPADDR(plane), val);
-	}
-
-	/* Program bit enable if it was requested */
-	if (enable) {
-		val = I915_READ(DSPSURF(plane));
-		val |= PLANE_RESERVED_REG_BIT_2_ENABLE;
-		I915_WRITE(DSPSURF(plane), val);
-
-		val = I915_READ(DSPSURFLIVE(plane));
-		val |= PLANE_RESERVED_REG_BIT_2_ENABLE;
-		I915_WRITE(DSPSURFLIVE(plane), val);
-
-		if (plane == 1 || plane == 4) {
-			val = I915_READ(VLV_DSPADDR(plane));
-			val |= PLANE_RESERVED_REG_BIT_2_ENABLE;
-			I915_WRITE(VLV_DSPADDR(plane), val);
-		}
-	}
-
-	return 0;
-}
-
 /* Computes the linear offset to the base tile and adjusts x, y. bytes per pixel
  * is assumed to be a power-of-two. */
 unsigned long intel_gen4_compute_page_offset(int *x, int *y,
@@ -11468,27 +11424,63 @@ int i915_enable_plane_reserved_reg_bit_2(struct drm_device *dev, void *data,
 	crtc = to_intel_crtc(obj_to_crtc(drmmode_obj));
 	pipe_id = crtc->pipe;
 
-	reg1 = SPRSURF(pipe_id);
-	reg2 = SPRSURFLIVE(pipe_id);
+	if (IS_VALLEYVIEW(dev)) {
+		int plane = rrb->plane;
 
-	if (enable) {
+		/* Clear the older rrb setting*/
+		val = I915_READ(DSPSURF(plane));
+		val &= ~PLANE_RESERVED_REG_BIT_2_ENABLE;
+		I915_WRITE(DSPSURF(plane), val);
+
+		val = I915_READ(DSPSURFLIVE(plane));
+		val &= ~PLANE_RESERVED_REG_BIT_2_ENABLE;
+		I915_WRITE(DSPSURFLIVE(plane), val);
+
+		if (plane == 1 || plane == 4) {
+			val = I915_READ(VLV_DSPADDR(plane));
+			val &= ~PLANE_RESERVED_REG_BIT_2_ENABLE;
+			I915_WRITE(VLV_DSPADDR(plane), val);
+		}
+
 		/* Program bit enable if it was requested */
-		val = I915_READ(reg1);
-		val |= SURF_RESERVED_REG_BIT_2_ENABLE;
-		I915_WRITE(reg1, val);
+		if (enable) {
+			val = I915_READ(DSPSURF(plane));
+			val |= PLANE_RESERVED_REG_BIT_2_ENABLE;
+			I915_WRITE(DSPSURF(plane), val);
 
-		val = I915_READ(reg2);
-		val |= SURF_RESERVED_REG_BIT_2_ENABLE;
-		I915_WRITE(reg2, val);
+			val = I915_READ(DSPSURFLIVE(plane));
+			val |= PLANE_RESERVED_REG_BIT_2_ENABLE;
+			I915_WRITE(DSPSURFLIVE(plane), val);
+
+			if (plane == 1 || plane == 4) {
+				val = I915_READ(VLV_DSPADDR(plane));
+				val |= PLANE_RESERVED_REG_BIT_2_ENABLE;
+				I915_WRITE(VLV_DSPADDR(plane), val);
+			}
+		}
 	} else {
-		/* Clear the older rrb setting */
-		val = I915_READ(reg1);
-		val &= ~SURF_RESERVED_REG_BIT_2_ENABLE;
-		I915_WRITE(reg1, val);
+		reg1 = SPRSURF(pipe_id);
+		reg2 = SPRSURFLIVE(pipe_id);
 
-		val = I915_READ(reg2);
-		val &= ~SURF_RESERVED_REG_BIT_2_ENABLE;
-		I915_WRITE(reg2, val);
+		if (enable) {
+			/* Program bit enable if it was requested */
+			val = I915_READ(reg1);
+			val |= SURF_RESERVED_REG_BIT_2_ENABLE;
+			I915_WRITE(reg1, val);
+
+			val = I915_READ(reg2);
+			val |= SURF_RESERVED_REG_BIT_2_ENABLE;
+			I915_WRITE(reg2, val);
+		} else {
+			/* Clear the older rrb setting */
+			val = I915_READ(reg1);
+			val &= ~SURF_RESERVED_REG_BIT_2_ENABLE;
+			I915_WRITE(reg1, val);
+
+			val = I915_READ(reg2);
+			val &= ~SURF_RESERVED_REG_BIT_2_ENABLE;
+			I915_WRITE(reg2, val);
+		}
 	}
 	return 0;
 }
@@ -11529,7 +11521,7 @@ struct intel_display_error_state {
 	} plane[I915_MAX_PIPES];
 };
 
-struct intel_display_error_state *
+	struct intel_display_error_state *
 intel_display_capture_error_state(struct drm_device *dev)
 {
 	drm_i915_private_t *dev_priv = dev->dev_private;
@@ -11592,21 +11584,21 @@ intel_display_capture_error_state(struct drm_device *dev)
 
 #define err_printf(e, ...) i915_error_printf(e, __VA_ARGS__)
 
-void
+	void
 intel_display_print_error_state(struct drm_i915_error_state_buf *m,
-				struct drm_device *dev,
-				struct intel_display_error_state *error)
+		struct drm_device *dev,
+		struct intel_display_error_state *error)
 {
 	int i;
 
 	err_printf(m, "Num Pipes: %d\n", INTEL_INFO(dev)->num_pipes);
 	if (HAS_POWER_WELL(dev))
 		err_printf(m, "PWR_WELL_CTL2: %08x\n",
-			   error->power_well_driver);
+				error->power_well_driver);
 	for_each_pipe(i) {
 		err_printf(m, "Pipe [%d]:\n", i);
 		err_printf(m, "  CPU transcoder: %c\n",
-			   transcoder_name(error->pipe[i].cpu_transcoder));
+				transcoder_name(error->pipe[i].cpu_transcoder));
 		err_printf(m, "  CONF: %08x\n", error->pipe[i].conf);
 		err_printf(m, "  SRC: %08x\n", error->pipe[i].source);
 		err_printf(m, "  HTOTAL: %08x\n", error->pipe[i].htotal);
@@ -11638,7 +11630,7 @@ intel_display_print_error_state(struct drm_i915_error_state_buf *m,
 }
 
 int i915_disp_screen_control(struct drm_device *dev, void *data,
-			struct drm_file *file)
+		struct drm_file *file)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	struct drm_i915_disp_screen_control *screen_cntrl = data;
@@ -11657,7 +11649,7 @@ int i915_disp_screen_control(struct drm_device *dev, void *data,
 		return -EINVAL;
 	}
 
-	 crtc = obj_to_crtc(obj);
+	crtc = obj_to_crtc(obj);
 	DRM_DEBUG_DRIVER("[CRTC:%d]\n", crtc->base.id);
 	intel_crtc = to_intel_crtc(crtc);
 	pipe = intel_crtc->pipe;
