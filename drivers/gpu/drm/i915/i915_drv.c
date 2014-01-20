@@ -332,6 +332,7 @@ static const struct intel_device_info intel_valleyview_m_info = {
 	.display_mmio_offset = VLV_DISPLAY_BASE,
 	.has_fbc = 0, /* legal, last one wins */
 	.has_llc = 0, /* legal, last one wins */
+	.has_dpst = 1,
 };
 
 static const struct intel_device_info intel_valleyview_d_info = {

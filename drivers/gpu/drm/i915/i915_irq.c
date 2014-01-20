@@ -1513,6 +1513,9 @@ static irqreturn_t valleyview_irq_handler(int irq, void *arg)
 
 			if (pipe_stats[pipe] & PIPE_CRC_DONE_INTERRUPT_STATUS)
 				i9xx_pipe_crc_irq_handler(dev, pipe);
+
+			if (pipe_stats[pipe] & PIPE_DPST_EVENT_STATUS)
+				i915_dpst_irq_handler(dev);
 		}
 
 		/* Consume port.  Then clear IIR or we'll miss events */
