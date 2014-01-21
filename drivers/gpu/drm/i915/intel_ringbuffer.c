@@ -562,6 +562,7 @@ static int init_render_ring(struct intel_ring_buffer *ring)
 	struct drm_device *dev = ring->dev;
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	int ret = init_ring_common(ring);
+	u32 imr;
 
 	if (INTEL_INFO(dev)->gen > 3)
 		if (!IS_VALLEYVIEW(dev))
@@ -620,8 +621,12 @@ static int init_render_ring(struct intel_ring_buffer *ring)
 	if (INTEL_INFO(dev)->gen >= 6)
 		I915_WRITE(INSTPM, _MASKED_BIT_ENABLE(INSTPM_FORCE_ORDERING));
 
+	imr = ~0;
 	if (HAS_L3_DPF(dev))
-		I915_WRITE_IMR(ring, ~GT_PARITY_ERROR(dev));
+		imr &= ~GT_PARITY_ERROR(dev);
+	if (IS_GEN7(dev))
+		imr &= ~GT_RENDER_PERFMON_BUFFER_INTERRUPT;
+	I915_WRITE_IMR(ring, imr);
 
 	return ret;
 }
@@ -1044,12 +1049,12 @@ gen6_ring_get_irq(struct intel_ring_buffer *ring)
 
 	spin_lock_irqsave(&dev_priv->irq_lock, flags);
 	if (ring->irq_refcount++ == 0) {
+		u32 mask = ~ring->irq_enable_mask;
 		if (HAS_L3_DPF(dev) && ring->id == RCS)
-			I915_WRITE_IMR(ring,
-				       ~(ring->irq_enable_mask |
-					 GT_PARITY_ERROR(dev)));
-		else
-			I915_WRITE_IMR(ring, ~ring->irq_enable_mask);
+			mask &= ~GT_PARITY_ERROR(dev);
+		if (IS_GEN7(dev))
+			mask &= ~GT_RENDER_PERFMON_BUFFER_INTERRUPT;
+		I915_WRITE_IMR(ring, mask);
 		ilk_enable_gt_irq(dev_priv, ring->irq_enable_mask);
 	}
 	spin_unlock_irqrestore(&dev_priv->irq_lock, flags);
@@ -1066,10 +1071,12 @@ gen6_ring_put_irq(struct intel_ring_buffer *ring)
 
 	spin_lock_irqsave(&dev_priv->irq_lock, flags);
 	if (--ring->irq_refcount == 0) {
+		u32 mask = ~0;
 		if (HAS_L3_DPF(dev) && ring->id == RCS)
-			I915_WRITE_IMR(ring, ~GT_PARITY_ERROR(dev));
-		else
-			I915_WRITE_IMR(ring, ~0);
+			mask &= ~GT_PARITY_ERROR(dev);
+		if (IS_GEN7(dev))
+			mask &= ~GT_RENDER_PERFMON_BUFFER_INTERRUPT;
+		I915_WRITE_IMR(ring, mask);
 		ilk_disable_gt_irq(dev_priv, ring->irq_enable_mask);
 	}
 	spin_unlock_irqrestore(&dev_priv->irq_lock, flags);

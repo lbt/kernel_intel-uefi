@@ -1504,6 +1504,10 @@ typedef struct drm_i915_private {
 	struct intel_ddi_plls ddi_plls;
 	int dpio_phy_iosf_port[I915_NUM_PHYS_VLV];
 
+	/* perfmon interrupt support */
+	wait_queue_head_t perfmon_buffer_queue;
+	atomic_t perfmon_buffer_interrupts;
+
 	/* Reclocking support */
 	bool render_reclock_avail;
 	bool lvds_downclock_avail;
@@ -2633,6 +2637,9 @@ void vlv_force_wake_put(struct drm_i915_private *dev_priv, int fw_engine);
 #define FORCEWAKE_MEDIA		(1 << 1)
 #define FORCEWAKE_ALL		(FORCEWAKE_RENDER | FORCEWAKE_MEDIA)
 
+/* i195_perfmon.c */
+int i915_perfmon_ioctl(struct drm_device *dev, void *data,
+	struct drm_file *file);
 
 #define I915_READ8(reg)		dev_priv->uncore.funcs.mmio_readb(dev_priv, (reg), true)
 #define I915_WRITE8(reg, val)	dev_priv->uncore.funcs.mmio_writeb(dev_priv, (reg), (val), true)
