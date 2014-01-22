@@ -23,4 +23,5 @@ obj-$(CONFIG_INTEL_MEI_TXE) += mei-txe.o
 mei-txe-objs := pci-txe.o
 mei-txe-objs += hw-txe.o
 mei-txe-objs += dma-txe.o
+mei-txe-objs += mm-txe.o
 

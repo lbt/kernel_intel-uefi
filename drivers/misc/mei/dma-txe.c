@@ -179,15 +179,26 @@ int mei_txe_dma_setup(struct mei_device *dev)
 	err = mei_txe_setup_satt2(dev,
 		dma_to_phys(&dev->pdev->dev, hw->pool_paddr), hw->pool_size);
 
-	if (err && hw->pool_release)
-		hw->pool_release(hw);
+	if (err) {
+		if (hw->pool_release)
+			hw->pool_release(hw);
+		return err;
+	}
 
-	return err;
+	hw->mdev = mei_mm_init(&dev->pdev->dev,
+		hw->pool_vaddr, hw->pool_paddr, hw->pool_size);
+
+	if (IS_ERR_OR_NULL(hw->mdev))
+		return PTR_ERR(hw->mdev);
+
+	return 0;
 }
 
 void mei_txe_dma_unset(struct mei_device *dev)
 {
 	struct mei_txe_hw *hw = to_txe_hw(dev);
+
+	mei_mm_deinit(hw->mdev);
 
 	/* FIXME: do we need to unset satt2 ? */
 	if (hw->pool_release)

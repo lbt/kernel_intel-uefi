@@ -19,6 +19,7 @@
 
 #include "hw.h"
 #include "hw-txe-regs.h"
+#include "mm-txe.h"
 
 /* Flatten Hierarchy interrupt cause */
 #define TXE_INTR_READINESS_BIT  0 /* HISR_INT_0_STS */
@@ -49,6 +50,9 @@ struct mei_txe_hw {
 	bool recvd_aliveness;
 
 	unsigned long intr_cause;
+
+	/** mei mm support */
+	struct mei_mm_device *mdev;
 
 	/** dma support */
 	void *pool_vaddr;
