@@ -49,6 +49,13 @@ struct mei_txe_hw {
 	bool recvd_aliveness;
 
 	unsigned long intr_cause;
+
+	/** dma support */
+	void *pool_vaddr;
+	dma_addr_t pool_paddr;
+	size_t pool_size;
+
+	void (*pool_release) (struct mei_txe_hw *hw);
 };
 
 #define to_txe_hw(dev) (struct mei_txe_hw *)((dev)->hw)
@@ -66,6 +73,9 @@ irqreturn_t mei_txe_irq_thread_handler(int irq, void *dev_id);
 int mei_txe_aliveness_set_sync(struct mei_device *dev, u32 req);
 
 int mei_txe_setup_satt2(struct mei_device *dev, phys_addr_t addr, u32 range);
+
+int mei_txe_dma_setup(struct mei_device *dev);
+void mei_txe_dma_unset(struct mei_device *dev);
 
 
 #endif /* _MEI_HW_TXE_H_ */

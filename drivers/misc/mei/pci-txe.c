@@ -137,6 +137,10 @@ static int mei_txe_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		goto release_irq;
 	}
 
+	err = mei_txe_dma_setup(dev);
+	if (err)
+		goto release_irq;
+
 	err = mei_register(dev);
 	if (err)
 		goto release_irq;
@@ -146,6 +150,8 @@ static int mei_txe_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	return 0;
 
 release_irq:
+
+	mei_txe_dma_unset(dev);
 
 	mei_cancel_work(dev);
 
@@ -195,6 +201,8 @@ static void mei_txe_remove(struct pci_dev *pdev)
 	mei_disable_interrupts(dev);
 	free_irq(pdev->irq, dev);
 	pci_disable_msi(pdev);
+
+	mei_txe_dma_unset(dev);
 
 	pci_set_drvdata(pdev, NULL);
 
