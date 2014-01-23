@@ -8850,10 +8850,6 @@ static int intel_gen7_queue_flip(struct drm_device *dev,
 		intel_ring_emit(ring, ring->scratch.gtt_offset + 256);
 	}
 
-	if (IS_HASWELL(dev))
-		if (!hsw_update_plane(crtc, fb, 0, 0))
-			DRM_ERROR("Failed to update plane\n");
-
 	intel_ring_emit(ring, MI_DISPLAY_FLIP_I915 | plane_bit);
 	intel_ring_emit(ring, (fb->pitches[0] | obj->tiling_mode));
 	intel_ring_emit(ring, i915_gem_obj_ggtt_offset(obj) + intel_crtc->dspaddr_offset);
@@ -8927,6 +8923,9 @@ static int intel_crtc_page_flip(struct drm_crtc *crtc,
 				crtc->fb->pitches[0], crtc->fb->offsets[0]);
 			DRM_DEBUG_DRIVER(" input fb: pitch = %d offset = %d\n",
 				fb->pitches[0], fb->offsets[0]);
+				if (hsw_update_plane(crtc, fb, 0, 0))
+					DRM_ERROR("Failed to update plane\n");
+
 	} else if (INTEL_INFO(dev)->gen > 3 &&
 	    (fb->offsets[0] != crtc->fb->offsets[0] ||
 	     fb->pitches[0] != crtc->fb->pitches[0]))
