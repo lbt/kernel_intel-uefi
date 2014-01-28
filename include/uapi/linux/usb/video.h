@@ -124,7 +124,12 @@
 #define UVC_PU_ANALOG_VIDEO_STANDARD_CONTROL		0x11
 #define UVC_PU_ANALOG_LOCK_STATUS_CONTROL		0x12
 
-/* A.9.7. VideoStreaming Interface Control Selectors */
+/* A.9.7. Extension Unit Control Selectors */
+#define UVC_XU_CONTROL_UNDEFINED			0x00
+#define UVC_XU_RTK_ISP_SPECIAL_EFFECT_CONTROL		0x01
+#define UVC_XU_RTK_ROI_CONTROL				0x14
+
+/* A.9.8. VideoStreaming Interface Control Selectors */
 #define UVC_VS_CONTROL_UNDEFINED			0x00
 #define UVC_VS_PROBE_CONTROL				0x01
 #define UVC_VS_COMMIT_CONTROL				0x02
