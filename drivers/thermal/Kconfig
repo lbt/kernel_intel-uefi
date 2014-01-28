@@ -169,4 +169,11 @@ config INTEL_POWERCLAMP
 	  enforce idle time which results in more package C-state residency. The
 	  user interface is exposed via generic thermal framework.
 
+config ACPI_INT3403_THERMAL
+	tristate "ACPI INT3403 thermal driver"
+	depends on X86 && ACPI
+	help
+	  This driver uses ACPI INT3403 device objects. If present, it will
+	  register each INT3403 thermal sensor as a thermal zone.
+
 endif
