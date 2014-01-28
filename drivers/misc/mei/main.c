@@ -43,12 +43,14 @@
 #include "hw-me.h"
 #include "client.h"
 
+#include "pavp.h"
+
 /**
  * mei_open - the open function
  *
  * @inode: pointer to inode structure
  * @file: pointer to file structure
- e
+ *
  * returns 0 on success, <0 on error
  */
 static int mei_open(struct inode *inode, struct file *file)
@@ -60,48 +62,45 @@ static int mei_open(struct inode *inode, struct file *file)
 
 	int err;
 
-	err = -ENODEV;
 	if (!misc->parent)
-		goto out;
+		return -ENODEV;
 
 	pdev = container_of(misc->parent, struct pci_dev, dev);
 
 	dev = pci_get_drvdata(pdev);
 	if (!dev)
-		goto out;
+		return -ENODEV;
 
 	mutex_lock(&dev->device_lock);
-	err = -ENOMEM;
-	cl = mei_cl_allocate(dev);
-	if (!cl)
-		goto out_unlock;
+
+	cl = NULL;
 
 	err = -ENODEV;
 	if (dev->dev_state != MEI_DEV_ENABLED) {
 		dev_dbg(&dev->pdev->dev, "dev_state != MEI_ENABLED  dev_state = %s\n",
 		    mei_dev_state_str(dev->dev_state));
-		goto out_unlock;
-	}
-	err = -EMFILE;
-	if (dev->open_handle_count >= MEI_MAX_OPEN_HANDLE_COUNT) {
-		dev_err(&dev->pdev->dev, "open_handle_count exceded %d",
-			MEI_MAX_OPEN_HANDLE_COUNT);
-		goto out_unlock;
+		goto err_unlock;
 	}
 
+	err = -ENOMEM;
+	cl = mei_cl_allocate(dev);
+	if (!cl)
+		goto err_unlock;
+
+	/* open_handle_count check is handled in the mei_cl_link */
 	err = mei_cl_link(cl, MEI_HOST_CLIENT_ID_ANY);
 	if (err)
-		goto out_unlock;
+		goto err_unlock;
 
 	file->private_data = cl;
+
 	mutex_unlock(&dev->device_lock);
 
 	return nonseekable_open(inode, file);
 
-out_unlock:
+err_unlock:
 	mutex_unlock(&dev->device_lock);
 	kfree(cl);
-out:
 	return err;
 }
 
@@ -144,11 +143,8 @@ static int mei_release(struct inode *inode, struct file *file)
 	    cl->host_client_id,
 	    cl->me_client_id);
 
-	if (dev->open_handle_count > 0) {
-		clear_bit(cl->host_client_id, dev->host_clients_map);
-		dev->open_handle_count--;
-	}
 	mei_cl_unlink(cl);
+	mei_cl_dmabuf_all_release(cl);
 
 
 	/* free read cb */
@@ -165,10 +161,7 @@ static int mei_release(struct inode *inode, struct file *file)
 
 	file->private_data = NULL;
 
-	if (cb) {
-		mei_io_cb_free(cb);
-		cb = NULL;
-	}
+	mei_io_cb_free(cb);
 
 	kfree(cl);
 out:
@@ -194,7 +187,6 @@ static ssize_t mei_read(struct file *file, char __user *ubuf,
 	struct mei_cl_cb *cb_pos = NULL;
 	struct mei_cl_cb *cb = NULL;
 	struct mei_device *dev;
-	int i;
 	int rets;
 	int err;
 
@@ -204,24 +196,16 @@ static ssize_t mei_read(struct file *file, char __user *ubuf,
 
 	dev = cl->dev;
 
+
 	mutex_lock(&dev->device_lock);
 	if (dev->dev_state != MEI_DEV_ENABLED) {
 		rets = -ENODEV;
 		goto out;
 	}
 
-	if ((cl->sm_state & MEI_WD_STATE_INDEPENDENCE_MSG_SENT) == 0) {
-		/* Do not allow to read watchdog client */
-		i = mei_me_cl_by_uuid(dev, &mei_wd_guid);
-		if (i >= 0) {
-			struct mei_me_client *me_client = &dev->me_clients[i];
-			if (cl->me_client_id == me_client->client_id) {
-				rets = -EBADF;
-				goto out;
-			}
-		}
-	} else {
-		cl->sm_state &= ~MEI_WD_STATE_INDEPENDENCE_MSG_SENT;
+	if (length == 0) {
+		rets = 0;
+		goto out;
 	}
 
 	if (cl == &dev->iamthif_cl) {
@@ -229,19 +213,21 @@ static ssize_t mei_read(struct file *file, char __user *ubuf,
 		goto out;
 	}
 
-	if (cl->read_cb && cl->read_cb->buf_idx > *offset) {
+	if (cl->read_cb) {
 		cb = cl->read_cb;
-		goto copy_buffer;
-	} else if (cl->read_cb && cl->read_cb->buf_idx > 0 &&
-		   cl->read_cb->buf_idx <= *offset) {
-		cb = cl->read_cb;
-		rets = 0;
-		goto free;
-	} else if ((!cl->read_cb || !cl->read_cb->buf_idx) && *offset > 0) {
-		/*Offset needs to be cleaned for contiguous reads*/
+		/* read what left */
+		if (cb->buf_idx > *offset)
+			goto copy_buffer;
+		/* offset is beyond buf_idx we have no more data return 0 */
+		if (cb->buf_idx > 0 && cb->buf_idx <= *offset) {
+			rets = 0;
+			goto free;
+		}
+		/* Offset needs to be cleaned for contiguous reads*/
+		if (cb->buf_idx == 0 && *offset > 0)
+			*offset = 0;
+	} else if (*offset > 0) {
 		*offset = 0;
-		rets = 0;
-		goto out;
 	}
 
 	err = mei_cl_read_start(cl, length);
@@ -360,8 +346,14 @@ static ssize_t mei_write(struct file *file, const char __user *ubuf,
 		rets = -ENODEV;
 		goto out;
 	}
-	if (length > dev->me_clients[id].props.max_msg_length || length <= 0) {
-		rets = -EMSGSIZE;
+
+	if (length == 0) {
+		rets = 0;
+		goto out;
+	}
+
+	if (length > dev->me_clients[id].props.max_msg_length) {
+		rets = -EFBIG;
 		goto out;
 	}
 
@@ -414,18 +406,11 @@ static ssize_t mei_write(struct file *file, const char __user *ubuf,
 		goto out;
 
 	rets = copy_from_user(write_cb->request_buffer.data, ubuf, length);
-	if (rets)
+	if (rets) {
+		dev_err(&dev->pdev->dev, "failed to copy data from userland\n");
+		rets = -EFAULT;
 		goto out;
-
-	cl->sm_state = 0;
-	if (length == 4 &&
-	    ((memcmp(mei_wd_state_independence_msg[0],
-				 write_cb->request_buffer.data, 4) == 0) ||
-	     (memcmp(mei_wd_state_independence_msg[1],
-				 write_cb->request_buffer.data, 4) == 0) ||
-	     (memcmp(mei_wd_state_independence_msg[2],
-				 write_cb->request_buffer.data, 4) == 0)))
-		cl->sm_state |= MEI_WD_STATE_INDEPENDENCE_MSG_SENT;
+	}
 
 	if (cl == &dev->iamthif_cl) {
 		rets = mei_amthif_write(dev, write_cb);
@@ -437,9 +422,11 @@ static ssize_t mei_write(struct file *file, const char __user *ubuf,
 		}
 		mutex_unlock(&dev->device_lock);
 		return length;
-	}
-
-	rets = mei_cl_write(cl, write_cb, false);
+	} else if (uuid_le_cmp(pavp_uuid,
+			dev->me_clients[id].props.protocol_name) == 0)
+		rets = mei_pavp_write(cl, write_cb);
+	else
+		rets = mei_cl_write(cl, write_cb, false);
 out:
 	mutex_unlock(&dev->device_lock);
 	if (rets < 0)
@@ -512,11 +499,11 @@ static int mei_ioctl_connect_client(struct file *file,
 			rets = -ENODEV;
 			goto end;
 		}
-		clear_bit(cl->host_client_id, dev->host_clients_map);
 		mei_cl_unlink(cl);
 
 		kfree(cl);
 		cl = NULL;
+		dev->iamthif_open_count++;
 		file->private_data = &dev->iamthif_cl;
 
 		client = &data->out_client_properties;
@@ -543,7 +530,55 @@ end:
 	return rets;
 }
 
+static int mei_ioctl_client_setup_buf(struct file *file,
+				      struct mei_client_dma_data *data)
+{
 
+	struct mei_device *dev;
+	struct mei_cl *cl;
+	int id;
+
+	cl = file->private_data;
+	if (WARN_ON(!cl || !cl->dev))
+		return -ENODEV;
+
+	dev = cl->dev;
+
+	if (!mei_cl_is_connected(cl))
+		return -ENODEV;
+
+	if (!data->userptr)
+		return -EINVAL;
+
+	id = mei_cl_dmabuf_setup(cl, data);
+	/* FIXME valudate id */
+
+	data->handle = id;
+
+	dev_dbg(&dev->pdev->dev,  "userptr=%lX, length=%d, handle=%X\n",
+		data->userptr, data->length, data->handle);
+
+	return 0;
+}
+
+static int mei_ioctl_client_unset_buf(struct file *file,
+				      struct mei_client_dma_handle *handle)
+{
+	struct mei_cl *cl;
+	int rets;
+	int id = handle->handle;
+
+	cl = file->private_data;
+	if (WARN_ON(!cl || !cl->dev))
+		return -ENODEV;
+
+	if (!mei_cl_is_connected(cl))
+		return -ENODEV;
+
+	rets = mei_cl_dmabuf_unset(cl, id);
+
+	return rets;
+}
 /**
  * mei_ioctl - the IOCTL function
  *
@@ -558,10 +593,10 @@ static long mei_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 	struct mei_device *dev;
 	struct mei_cl *cl = file->private_data;
 	struct mei_connect_client_data *connect_data = NULL;
+	struct mei_client_dma_data buf_data;
+	struct mei_client_dma_handle buf_handle;
 	int rets;
 
-	if (cmd != IOCTL_MEI_CONNECT_CLIENT)
-		return -EINVAL;
 
 	if (WARN_ON(!cl || !cl->dev))
 		return -ENODEV;
@@ -576,34 +611,88 @@ static long mei_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 		goto out;
 	}
 
-	dev_dbg(&dev->pdev->dev, ": IOCTL_MEI_CONNECT_CLIENT.\n");
-
-	connect_data = kzalloc(sizeof(struct mei_connect_client_data),
+	switch (cmd) {
+	case IOCTL_MEI_CONNECT_CLIENT:
+		dev_dbg(&dev->pdev->dev, ": IOCTL_MEI_CONNECT_CLIENT.\n");
+		connect_data = kzalloc(sizeof(struct mei_connect_client_data),
 							GFP_KERNEL);
-	if (!connect_data) {
-		rets = -ENOMEM;
-		goto out;
-	}
-	dev_dbg(&dev->pdev->dev, "copy connect data from user\n");
-	if (copy_from_user(connect_data, (char __user *)data,
+		if (!connect_data) {
+			rets = -ENOMEM;
+			goto out;
+		}
+
+		dev_dbg(&dev->pdev->dev, "copy connect data from user\n");
+		if (copy_from_user(connect_data, (char __user *)data,
 				sizeof(struct mei_connect_client_data))) {
-		dev_dbg(&dev->pdev->dev, "failed to copy data from userland\n");
-		rets = -EFAULT;
-		goto out;
-	}
+			dev_err(&dev->pdev->dev, "failed to copy data from userland\n");
+			rets = -EFAULT;
+			goto out;
+		}
 
-	rets = mei_ioctl_connect_client(file, connect_data);
+		rets = mei_ioctl_connect_client(file, connect_data);
 
-	/* if all is ok, copying the data back to user. */
-	if (rets)
-		goto out;
+		/* if all is ok, copying the data back to user. */
+		if (rets)
+			goto out;
 
-	dev_dbg(&dev->pdev->dev, "copy connect data to user\n");
-	if (copy_to_user((char __user *)data, connect_data,
+		dev_dbg(&dev->pdev->dev, "copy connect data to user\n");
+		if (copy_to_user((char __user *)data, connect_data,
 				sizeof(struct mei_connect_client_data))) {
-		dev_dbg(&dev->pdev->dev, "failed to copy data to userland\n");
-		rets = -EFAULT;
-		goto out;
+			dev_dbg(&dev->pdev->dev, "failed to copy data to userland\n");
+			rets = -EFAULT;
+			goto out;
+
+		}
+
+		break;
+	case IOCTL_MEI_SETUP_DMA_BUF:
+		dev_dbg(&dev->pdev->dev, ": IOCTL_MEI_SETUP_DMA_BUF\n");
+
+		if (cl->state != MEI_FILE_CONNECTED) {
+			dev_warn(&dev->pdev->dev, "cannot setup dma buf while not connected\n");
+			rets = -EINVAL;
+			goto out;
+		}
+		if (copy_from_user(&buf_data, (char __user *)data,
+					sizeof(struct mei_client_dma_data))) {
+			dev_err(&dev->pdev->dev, "failed to copy data from userland\n");
+			rets = -EFAULT;
+			goto out;
+		}
+
+		dev_dbg(&dev->pdev->dev, "userptr=0x%lX length=%d handle=0x%X\n",
+			buf_data.userptr, buf_data.length, buf_data.handle);
+
+		rets = mei_ioctl_client_setup_buf(file, &buf_data);
+
+		/* if all is ok, copying the data back to user. */
+		if (rets)
+			goto out;
+
+		dev_dbg(&dev->pdev->dev, "copy connect data to user\n");
+		if (copy_to_user((char __user *)data, &buf_data,
+					sizeof(struct mei_client_dma_data))) {
+			dev_err(&dev->pdev->dev, "failed to copy data to userland\n");
+			rets = -EFAULT;
+			goto out;
+		}
+		break;
+	case IOCTL_MEI_UNSET_DMA_BUF:
+		if (copy_from_user(&buf_handle, (char __user *)data,
+					sizeof(struct mei_client_dma_handle))) {
+			dev_err(&dev->pdev->dev, "failed to copy data from userland\n");
+			rets = -EFAULT;
+			goto out;
+		}
+		rets = mei_ioctl_client_unset_buf(file, &buf_handle);
+		if (rets)
+			goto out;
+		dev_dbg(&dev->pdev->dev, ": IOCTL_MEI_UNSET_DMA_BUF\n");
+		break;
+	default:
+		dev_err(&dev->pdev->dev, ": unsupported ioctl %d.\n", cmd);
+		rets = -EINVAL;
+		break;
 	}
 
 out:
@@ -622,12 +711,68 @@ out:
  * returns 0 on success , <0 on error
  */
 #ifdef CONFIG_COMPAT
+
+#define IOCTL_MEI_SETUP_DMA_BUF32	\
+	_IOWR('H' , 0x02, struct mei_client_dma_data32)
+
+struct mei_client_dma_data32 {
+	union {
+		compat_ulong_t userptr;
+	};
+	__u32                  length;
+	__u32                  handle;
+};
+
 static long mei_compat_ioctl(struct file *file,
-			unsigned int cmd, unsigned long data)
+			unsigned int cmd, unsigned long arg)
 {
-	return mei_ioctl(file, cmd, (unsigned long)compat_ptr(data));
+	struct mei_device *dev;
+	struct mei_cl *cl = file->private_data;
+
+
+	if (WARN_ON(!cl || !cl->dev))
+		return -ENODEV;
+
+	dev = cl->dev;
+
+	dev_dbg(&dev->pdev->dev, "COMPAT IOCTL cmd = 0x%x", cmd);
+	if (cmd == IOCTL_MEI_SETUP_DMA_BUF32) {
+		struct mei_client_dma_data32 req32;
+		struct mei_client_dma_data __user *req;
+		long ret = 0;
+
+		if (copy_from_user(&req32, (void __user *)arg, sizeof(req32)))
+			return -EFAULT;
+
+		dev_dbg(&dev->pdev->dev, "compat userptr=0x%lX length=%d handle=0x%X\n",
+			(unsigned long)req32.userptr,
+			req32.length, req32.handle);
+
+		req = compat_alloc_user_space(sizeof(*req));
+
+		if (!access_ok(VERIFY_WRITE, req, sizeof(*req))  ||
+			__put_user(req32.userptr, &req->userptr) ||
+			__put_user(req32.length, &req->length)   ||
+			__put_user(req32.handle, &req->handle))
+			return -EFAULT;
+
+		ret = mei_ioctl(file, IOCTL_MEI_SETUP_DMA_BUF,
+				(unsigned long)req);
+		if (ret)
+			return ret;
+
+		__get_user(req32.handle, &req->handle);
+		__get_user(req32.length, &req->length);
+
+		if (copy_to_user((char __user *)arg, &req32,  sizeof(req32)))
+			return -EFAULT;
+
+		return ret;
+	}
+
+	return mei_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
 }
-#endif
+#endif /* CONFIG_COMPAT */
 
 
 /**
@@ -645,24 +790,32 @@ static unsigned int mei_poll(struct file *file, poll_table *wait)
 	unsigned int mask = 0;
 
 	if (WARN_ON(!cl || !cl->dev))
-		return mask;
+		return POLLERR;
 
 	dev = cl->dev;
 
 	mutex_lock(&dev->device_lock);
 
-	if (dev->dev_state != MEI_DEV_ENABLED)
-		goto out;
-
-
-	if (cl == &dev->iamthif_cl) {
-		mask = mei_amthif_poll(dev, file, wait);
+	if (!mei_cl_is_connected(cl)) {
+		mask = POLLERR;
 		goto out;
 	}
 
 	mutex_unlock(&dev->device_lock);
+
+
+	if (cl == &dev->iamthif_cl)
+		return mei_amthif_poll(dev, file, wait);
+
 	poll_wait(file, &cl->tx_wait, wait);
+
 	mutex_lock(&dev->device_lock);
+
+	if (!mei_cl_is_connected(cl)) {
+		mask = POLLERR;
+		goto out;
+	}
+
 	if (MEI_WRITE_COMPLETE == cl->writing_state)
 		mask |= (POLLIN | POLLRDNORM);
 
