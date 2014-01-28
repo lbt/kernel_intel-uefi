@@ -51,6 +51,7 @@
  *	document number TBD : Lynx Point
  *	document number TBD : Lynx Point-LP
  *	document number TBD : Wellsburg
+ *	document number 329670-001: Bay Trail
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -60,6 +61,7 @@
 #include <linux/module.h>
 #include <linux/errno.h>
 #include <linux/acpi.h>
+#include <acpi/button.h>
 #include <linux/pci.h>
 #include <linux/mfd/core.h>
 #include <linux/mfd/lpc_ich.h>
@@ -83,6 +85,8 @@
 
 #define RCBABASE		0xf0
 
+#define PWRBTN_LVL_BIT	(1<<9)
+
 #define wdt_io_res(i) wdt_res(0, i)
 #define wdt_mem_res(i) wdt_res(ICH_RES_MEM_OFF, i)
 #define wdt_res(b, i) (&wdt_ich_res[(b) + (i)])
@@ -97,6 +101,12 @@ struct lpc_ich_priv {
 	int chipset;
 	struct lpc_ich_cfg acpi;
 	struct lpc_ich_cfg gpio;
+#if defined(CONFIG_ACPI_BUTTON) || defined(CONFIG_ACPI_BUTTON_MODULE)
+	struct pci_dev *pcidev;
+	struct acpi_pwrbtn_poll_dev pwrbtn_poll;
+	struct resource *pmc_res;
+	void __iomem *pmc_mem;
+#endif
 };
 
 static struct resource wdt_ich_res[] = {
@@ -207,6 +217,7 @@ enum lpc_chipsets {
 	LPC_LPT,	/* Lynx Point */
 	LPC_LPT_LP,	/* Lynx Point-LP */
 	LPC_WBG,	/* Wellsburg */
+	LPC_BYT,	/* Bay Trail */
 };
 
 struct lpc_ich_info lpc_chipset_info[] = {
@@ -491,6 +502,11 @@ struct lpc_ich_info lpc_chipset_info[] = {
 		.name = "Wellsburg",
 		.iTCO_version = 2,
 	},
+	[LPC_BYT] = {
+		.name = "Bay Trail",
+		.iTCO_version = 2,
+		.pwrbtn_version = ICH_PWRBTN_BYT,
+	},
 };
 
 /*
@@ -632,6 +648,7 @@ static DEFINE_PCI_DEVICE_TABLE(lpc_ich_ids) = {
 	{ PCI_VDEVICE(INTEL, 0x1e5d), LPC_PPT},
 	{ PCI_VDEVICE(INTEL, 0x1e5e), LPC_PPT},
 	{ PCI_VDEVICE(INTEL, 0x1e5f), LPC_PPT},
+	{ PCI_VDEVICE(INTEL, 0x7270), LPC_LPT},
 	{ PCI_VDEVICE(INTEL, 0x8c40), LPC_LPT},
 	{ PCI_VDEVICE(INTEL, 0x8c41), LPC_LPT},
 	{ PCI_VDEVICE(INTEL, 0x8c42), LPC_LPT},
@@ -704,6 +721,7 @@ static DEFINE_PCI_DEVICE_TABLE(lpc_ich_ids) = {
 	{ PCI_VDEVICE(INTEL, 0x8d5d), LPC_WBG},
 	{ PCI_VDEVICE(INTEL, 0x8d5e), LPC_WBG},
 	{ PCI_VDEVICE(INTEL, 0x8d5f), LPC_WBG},
+	{ PCI_VDEVICE(INTEL, 0x0f1c), LPC_BYT},
 	{ 0, },			/* End of list */
 };
 MODULE_DEVICE_TABLE(pci, lpc_ich_ids);
@@ -909,6 +927,69 @@ wdt_done:
 	return ret;
 }
 
+#if defined(CONFIG_ACPI_BUTTON) || defined(CONFIG_ACPI_BUTTON_MODULE)
+#define LPC_ICH_GEN_PMCON_1	0xa0 /* ICH reg: pci config in device 1f.0 */
+#define LPC_BYT_PMCBASE		0x44 /* BYT reg: pci config in defice 1f.0 */
+#define PMC_GEN_PMCON2		0x24 /* offset to block pointed to by PMBASE */
+
+static int poll_power_button_ich(struct acpi_pwrbtn_poll_dev *dev)
+{
+	struct lpc_ich_priv *priv;
+	u16 reg;
+
+	priv = container_of(dev, struct lpc_ich_priv, pwrbtn_poll);
+	pci_read_config_word(priv->pcidev, LPC_ICH_GEN_PMCON_1, &reg);
+
+	return !(reg & PWRBTN_LVL_BIT);
+}
+
+static int poll_power_button_byt(struct acpi_pwrbtn_poll_dev *dev)
+{
+	u32 reg;
+	struct lpc_ich_priv *priv;
+
+	priv = container_of(dev, struct lpc_ich_priv, pwrbtn_poll);
+	reg = ioread32(priv->pmc_mem + PMC_GEN_PMCON2);
+
+	/* BYT datasheet defines this bit as 0 on
+	 * press, but it actually reports 1 when the
+	 * button is down... */
+	return !!(reg & PWRBTN_LVL_BIT);
+}
+
+static int init_power_button(struct pci_dev *pdev)
+{
+	u32 val;
+	struct lpc_ich_priv *priv;
+
+	if (!pdev)
+		return -EINVAL;
+
+	priv = pci_get_drvdata(pdev);
+	priv->pcidev = pdev;
+
+	/* Bay Trail puts the register in the PMC iomem region, so map it */
+	if (lpc_chipset_info[priv->chipset].pwrbtn_version == ICH_PWRBTN_BYT) {
+		pci_read_config_dword(pdev, LPC_BYT_PMCBASE, &val);
+		val &= ~0xfff;
+		priv->pmc_res = request_mem_region(val, 0xe0, "byt_pmc");
+		if (!priv->pmc_res)
+			return -ENODEV;
+		priv->pmc_mem = ioremap(priv->pmc_res->start, 0xe0);
+		if (!priv->pmc_mem) {
+			release_resource(priv->pmc_res);
+			priv->pmc_res = NULL;
+			return -ENODEV;
+		}
+		priv->pwrbtn_poll.poll = poll_power_button_byt;
+	} else {
+		priv->pwrbtn_poll.poll = poll_power_button_ich;
+	}
+
+	return acpi_pwrbtn_poll_register(&priv->pwrbtn_poll);
+}
+#endif
+
 static int lpc_ich_probe(struct pci_dev *dev,
 				const struct pci_device_id *id)
 {
@@ -945,6 +1026,9 @@ static int lpc_ich_probe(struct pci_dev *dev,
 	if (!ret)
 		cell_added = true;
 
+	if (IS_ENABLED(CONFIG_ACPI_BUTTON))
+		ret = init_power_button(dev);
+
 	/*
 	 * We only care if at least one or none of the cells registered
 	 * successfully.
@@ -956,11 +1040,21 @@ static int lpc_ich_probe(struct pci_dev *dev,
 		return -ENODEV;
 	}
 
-	return 0;
+	return ret;
 }
 
 static void lpc_ich_remove(struct pci_dev *dev)
 {
+	if (IS_ENABLED(CONFIG_ACPI_BUTTON)) {
+		struct lpc_ich_priv *priv = pci_get_drvdata(dev);
+		if (priv) {
+			acpi_pwrbtn_poll_unregister(&priv->pwrbtn_poll);
+			if (priv->pmc_mem)
+				iounmap(priv->pmc_mem);
+			if (priv->pmc_res)
+				release_resource(priv->pmc_res);
+		}
+	}
 	mfd_remove_devices(&dev->dev);
 	lpc_ich_restore_config_space(dev);
 	pci_set_drvdata(dev, NULL);
