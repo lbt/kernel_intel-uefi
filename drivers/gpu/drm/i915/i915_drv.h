@@ -1447,6 +1447,17 @@ typedef struct drm_i915_private {
 	bool is_hdmi;
 	u16 is_mipi;
 	u16 mipi_panel_id;
+
+#ifdef CONFIG_DRM_VXD_BYT
+	struct drm_psb_private *vxd_priv;
+	int (*vxd_driver_open)(struct drm_device *dev, struct drm_file *file);
+	void (*vxd_lastclose)(struct drm_device *dev);
+	long (*vxd_ioctl)(struct file *filp,
+		unsigned int cmd, unsigned long arg);
+	int (*vxd_release)(struct inode *inode, struct file *filp);
+	int (*psb_mmap)(struct file *filp, struct vm_area_struct *vma);
+	int (*psb_msvdx_interrupt)(void *pvData);
+#endif
 } drm_i915_private_t;
 
 static inline struct drm_i915_private *to_i915(const struct drm_device *dev)
@@ -1712,6 +1723,10 @@ struct drm_i915_file_private {
 	struct idr context_idr;
 
 	struct i915_ctx_hang_stats hang_stats;
+
+#ifdef CONFIG_DRM_VXD_BYT
+	struct psb_fpriv *pPriv;
+#endif
 };
 
 #define INTEL_INFO(dev)	(to_i915(dev)->info)
@@ -2516,6 +2531,8 @@ int i915_rpm_get_disp(struct drm_device *dev);
 int i915_rpm_put_disp(struct drm_device *dev);
 
 #ifdef CONFIG_DRM_VXD_BYT
+#define DRM_COMMAND_VXD_BASE 0x90
+#define DRM_COMMAND_VXD_SIZE 0x10
 int i915_rpm_get_vxd(struct drm_device *dev);
 int i915_rpm_put_vxd(struct drm_device *dev);
 #endif
@@ -2615,5 +2632,4 @@ timespec_to_jiffies_timeout(const struct timespec *value)
 
 	return min_t(unsigned long, MAX_JIFFY_OFFSET, j + 1);
 }
-
 #endif
