@@ -274,6 +274,7 @@ struct csc_coeff {
 #define DRM_I915_REG_READ		0x31
 #define DRM_I915_SET_PLANE_ZORDER	0x32
 #define DRM_I915_GET_RESET_STATS	0x33
+#define DRM_I915_GEM_USERPTR		0x34
 #define DRM_I915_SET_PLANE_180_ROTATION 0x36
 #define DRM_I915_ENABLE_PLANE_RESERVED_REG_BIT_2	0x37
 #define DRM_I915_SET_CSC		0x39
@@ -335,6 +336,9 @@ struct csc_coeff {
 			DRM_IOW(DRM_COMMAND_BASE + DRM_I915_SET_PLANE_ZORDER, \
 			struct drm_i915_set_plane_zorder)
 #define DRM_IOCTL_I915_GET_RESET_STATS		DRM_IOWR (DRM_COMMAND_BASE + DRM_I915_GET_RESET_STATS, struct drm_i915_reset_stats)
+#define DRM_IOCTL_I915_GEM_USERPTR \
+		DRM_IOWR (DRM_COMMAND_BASE + DRM_I915_GEM_USERPTR, \
+				struct drm_i915_gem_userptr)
 #define DRM_IOCTL_I915_SET_PLANE_ALPHA		\
 			DRM_IOW(DRM_COMMAND_BASE + DRM_I915_SET_PLANE_ALPHA, \
 			struct drm_i915_set_plane_alpha)
@@ -1340,6 +1344,20 @@ struct drm_i915_cmd_parser_append {
 	__u32 reg_count;
 
 	__u32 pad;
+};
+
+struct drm_i915_gem_userptr {
+	__u64 user_ptr;
+	__u64 user_size;
+	__u32 flags;
+#define I915_USERPTR_READ_ONLY 0x1
+#define I915_USERPTR_UNSYNCHRONIZED 0x80000000
+	/**
+	 * Returned handle for the object.
+	 *
+	 * Object handles are nonzero.
+	 */
+	__u32 handle;
 };
 
 #endif /* _UAPI_I915_DRM_H_ */
