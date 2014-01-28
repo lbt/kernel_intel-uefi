@@ -273,6 +273,18 @@ static int accel_3d_parse_report(struct platform_device *pdev,
 			st->accel[1].index, st->accel[1].report_id,
 			st->accel[2].index, st->accel[2].report_id);
 
+	/* Set Sensitivity field ids, when there is no individual modifier */
+	if (st->common_attributes.sensitivity.index < 0) {
+		sensor_hub_input_get_attribute_info(hsdev,
+			HID_FEATURE_REPORT, usage_id,
+			HID_USAGE_SENSOR_DATA_MOD_CHANGE_SENSITIVITY_ABS |
+			HID_USAGE_SENSOR_DATA_ACCELERATION,
+			&st->common_attributes.sensitivity);
+		dev_dbg(&pdev->dev, "Sensitivity index:report %d:%d\n",
+			st->common_attributes.sensitivity.index,
+			st->common_attributes.sensitivity.report_id);
+	}
+
 	return ret;
 }
 
@@ -303,6 +315,14 @@ static int hid_accel_3d_probe(struct platform_device *pdev)
 	if (ret) {
 		dev_err(&pdev->dev, "failed to setup common attributes\n");
 		goto error_free_dev;
+	}
+	if (accel_state->common_attributes.sensitivity.report_id == -1) {
+		sensor_hub_input_get_attribute_info(hsdev,
+			HID_FEATURE_REPORT,
+			HID_USAGE_SENSOR_ACCEL_3D,
+			HID_USAGE_SENSOR_ACCEL |
+				HID_USAGE_SENSOR_MODIFIER_CHG_SENSITIVITY_ABS,
+			&accel_state->common_attributes.sensitivity);
 	}
 
 	channels = kmemdup(accel_3d_channels, sizeof(accel_3d_channels),
