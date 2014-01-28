@@ -279,7 +279,7 @@ i915_gem_userptr_init__mmu_notifier(struct drm_i915_gem_object *obj,
 	int ret;
 
 	if (flags & I915_USERPTR_UNSYNCHRONIZED)
-		return capable(CAP_SYS_ADMIN) ? 0 : -EPERM;
+		return 0; /* VPG: Allow normal users. */
 
 	down_write(&obj->userptr.mm->mmap_sem);
 	ret = i915_mutex_lock_interruptible(obj->base.dev);
@@ -338,7 +338,7 @@ i915_gem_userptr_init__mmu_notifier(struct drm_i915_gem_object *obj,
 		return -ENODEV;
 
 	if (!capable(CAP_SYS_ADMIN))
-		return -EPERM;
+		return 0; /* VPG: Allow normal users. */
 
 	return 0;
 }
