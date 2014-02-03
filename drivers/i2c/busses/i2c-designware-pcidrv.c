@@ -63,6 +63,7 @@ enum dw_pci_ctl_id_t {
 	medfield_5,
 
 	valleyview_4,
+	valleyview_5,
 };
 
 struct dw_pci_controller {
@@ -207,6 +208,16 @@ static struct  dw_pci_controller  dw_pci_controllers[] = {
 		.reset = vlv2_reset,
 		.share_irq = 1,
 		.acpi_name = "\\_SB.I2C5"
+	},
+	[valleyview_5] = {
+		.bus_num     = 6,
+		.bus_cfg   = INTEL_MID_STD_CFG | DW_IC_CON_SPEED_FAST,
+		.tx_fifo_depth = 64,
+		.rx_fifo_depth = 64,
+		.scl_cfg = vlv2_i2c_scl_cfg,
+		.reset = vlv2_reset,
+		.share_irq = 1,
+		.acpi_name = "\\_SB.I2C6"
 	},
 };
 
@@ -672,6 +683,7 @@ DEFINE_PCI_DEVICE_TABLE(i2c_designware_pci_ids) = {
 	{ PCI_VDEVICE(INTEL, 0x082E), medfield_5 },
 	/* Valleyview 2 */
 	{ PCI_VDEVICE(INTEL, 0x0F45), valleyview_4 },
+	{ PCI_VDEVICE(INTEL, 0x0F46), valleyview_5 },
 	{ 0,}
 };
 MODULE_DEVICE_TABLE(pci, i2c_designware_pci_ids);
