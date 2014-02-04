@@ -29,8 +29,10 @@
 #include <linux/moduleparam.h>
 #include <linux/reboot.h>
 #include <linux/slab.h>
+#include <linux/suspend.h>
 
-#define LOADER_ENTRY_ONE_SHOT "LoaderEntryOneShot"
+#define LOADER_ENTRY_ONE_SHOT	"LoaderEntryOneShot"
+#define LOADER_RESUME_HIBERNATE	"LoaderResumeHibernate"
 #define LOADER_GUID EFI_GUID(0x4a67b082, 0x0a4c, 0x41cf, 0xb6, 0xc7, \
 				0x44, 0x0b, 0x29, 0xbb, 0x8c, 0x4f)
 
@@ -58,24 +60,16 @@ static size_t efi_char16_bufsz(char *str)
 }
 
 /*
- * Set EFI variable to specify next boot target for EFI bootloader. Meant to be
- * called as a reboot notifier. DO NOT call this function without guaranteeing
- * efi_enabled == true; it will crash.
+ * Meant to be called from a reboot or pm notifier. DO NOT call this function
+ * without guaranteeing efi_enabled == true; it will crash.
  */
-static int efibc_reboot_notifier_call(
-		struct notifier_block *notifier,
-		unsigned long what, void *data)
+static void set_loader_command(char *var, char *cmd)
 {
-	int ret = NOTIFY_DONE;
-	char *cmd = data;
 	efi_status_t status;
 	efi_char16_t *name_efichar = NULL, *cmd_efichar = NULL;
 	size_t name_efichar_blen, cmd_efichar_blen;
 
-	if (what != SYS_RESTART || cmd == NULL)
-		goto out;
-
-	name_efichar_blen = efi_char16_bufsz(LOADER_ENTRY_ONE_SHOT);
+	name_efichar_blen = efi_char16_bufsz(var);
 	cmd_efichar_blen = efi_char16_bufsz(cmd);
 
 	name_efichar = kzalloc(name_efichar_blen, GFP_KERNEL);
@@ -90,8 +84,8 @@ static int efibc_reboot_notifier_call(
 		goto out;
 	}
 
-	if (efichar_from_char(name_efichar, LOADER_ENTRY_ONE_SHOT,
-			name_efichar_blen) != strlen(LOADER_ENTRY_ONE_SHOT)) {
+	if (efichar_from_char(name_efichar, var,
+			name_efichar_blen) != strlen(var)) {
 		pr_err("efibc: %s: Failed to convert char to efi_char16_t. length=%lu",
 			__func__, name_efichar_blen);
 		goto out;
@@ -117,16 +111,42 @@ static int efibc_reboot_notifier_call(
 		pr_err("efibc: set_variable() failed. " "status=%lx\n", status);
 		goto out;
 	}
-
-	ret = NOTIFY_OK;
 out:
 	kfree(cmd_efichar);
 	kfree(name_efichar);
-	return ret;
+}
+
+/* If we're about to enter hibernation, tell the bootloader that we need
+ * to resume Linux from swap instead of doing a cold boot */
+static int efibc_pm_notifier_call(
+		struct notifier_block *notifier,
+		unsigned long pm_event, void *unused)
+{
+	if (pm_event == PM_HIBERNATION_PREPARE)
+		set_loader_command(LOADER_RESUME_HIBERNATE, "true");
+
+	return NOTIFY_DONE;
+}
+
+/* If a command was specified with the reboot system call, pass this to
+ * the loader; it will attempt to start a target in its configuration
+ * whose name matches */
+static int efibc_reboot_notifier_call(
+		struct notifier_block *notifier,
+		unsigned long what, void *data)
+{
+	if (what == SYS_RESTART && data != NULL)
+		set_loader_command(LOADER_ENTRY_ONE_SHOT, (char *)data);
+
+	return NOTIFY_DONE;
 }
 
 static struct notifier_block efibc_reboot_notifier = {
 	.notifier_call = efibc_reboot_notifier_call,
+};
+
+static struct notifier_block efibc_pm_notifier = {
+	.notifier_call = efibc_pm_notifier_call,
 };
 
 static int __init efibc_init(void)
@@ -139,6 +159,12 @@ static int __init efibc_init(void)
 	ret = register_reboot_notifier(&efibc_reboot_notifier);
 	if (ret) {
 		pr_err("efibc: unable to register reboot notifier\n");
+		return ret;
+	}
+
+	ret = register_pm_notifier(&efibc_pm_notifier);
+	if (ret) {
+		pr_err("efibc: unable to register pm notifier\n");
 		return ret;
 	}
 
