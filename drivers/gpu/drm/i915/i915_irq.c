@@ -1326,13 +1326,6 @@ static irqreturn_t valleyview_irq_handler(int irq, void *arg)
 			I915_READ(PORT_HOTPLUG_STAT);
 		}
 
-#ifdef CONFIG_DRM_VXD_BYT
-		if (iir & VED_BLOCK_INTERRUPT) {
-			if (dev_priv->psb_msvdx_interrupt)
-				dev_priv->psb_msvdx_interrupt(dev);
-		}
-#endif
-
 		if (pipe_stats[0] & PIPE_GMBUS_INTERRUPT_STATUS)
 			gmbus_irq_handler(dev);
 
@@ -2501,9 +2494,7 @@ static int valleyview_irq_postinstall(struct drm_device *dev)
 		I915_DISPLAY_PIPE_A_VBLANK_INTERRUPT |
 		I915_DISPLAY_PIPE_B_EVENT_INTERRUPT |
 		I915_DISPLAY_PIPE_B_VBLANK_INTERRUPT;
-#ifdef CONFIG_DRM_VXD_BYT
-	enable_mask |= VED_BLOCK_INTERRUPT;
-#endif
+
 	/*
 	 *Leave vblank interrupts masked initially.  enable/disable will
 	 * toggle them based on usage.
