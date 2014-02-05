@@ -2531,8 +2531,6 @@ int i915_rpm_get_disp(struct drm_device *dev);
 int i915_rpm_put_disp(struct drm_device *dev);
 
 #ifdef CONFIG_DRM_VXD_BYT
-#define DRM_COMMAND_VXD_BASE 0x90
-#define DRM_COMMAND_VXD_SIZE 0x10
 int i915_rpm_get_vxd(struct drm_device *dev);
 int i915_rpm_put_vxd(struct drm_device *dev);
 #endif
@@ -2632,4 +2630,5 @@ timespec_to_jiffies_timeout(const struct timespec *value)
 
 	return min_t(unsigned long, MAX_JIFFY_OFFSET, j + 1);
 }
+
 #endif

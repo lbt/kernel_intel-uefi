@@ -884,7 +884,7 @@ static long i915_ioctl(struct file *filp,
 	struct drm_i915_private *dev_priv = dev->dev_private;
 
 	if ((nr >= DRM_COMMAND_VXD_BASE) &&
-		(nr < DRM_COMMAND_VXD_BASE + DRM_COMMAND_VXD_SIZE)) {
+		(nr < DRM_COMMAND_VXD_BASE + 0x10)) {
 		BUG_ON(!dev_priv->vxd_ioctl);
 		return dev_priv->vxd_ioctl(filp, cmd, arg);
 	} else
