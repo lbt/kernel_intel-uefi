@@ -148,7 +148,9 @@ mgag200_bo_evict_flags(struct ttm_buffer_object *bo, struct ttm_placement *pl)
 
 static int mgag200_bo_verify_access(struct ttm_buffer_object *bo, struct file *filp)
 {
-	return 0;
+	struct mgag200_bo *mgabo = mgag200_bo(bo);
+
+	return drm_vma_node_verify_access(&mgabo->gem.vma_node, filp);
 }
 
 static int mgag200_ttm_io_mem_reserve(struct ttm_bo_device *bdev,
@@ -303,24 +305,6 @@ void mgag200_ttm_placement(struct mgag200_bo *bo, int domain)
 	bo->placement.num_busy_placement = c;
 }
 
-int mgag200_bo_reserve(struct mgag200_bo *bo, bool no_wait)
-{
-	int ret;
-
-	ret = ttm_bo_reserve(&bo->bo, true, no_wait, false, 0);
-	if (ret) {
-		if (ret != -ERESTARTSYS && ret != -EBUSY)
-			DRM_ERROR("reserve failed %p %d\n", bo, ret);
-		return ret;
-	}
-	return 0;
-}
-
-void mgag200_bo_unreserve(struct mgag200_bo *bo)
-{
-	ttm_bo_unreserve(&bo->bo);
-}
-
 int mgag200_bo_create(struct drm_device *dev, int size, int align,
 		  uint32_t flags, struct mgag200_bo **pmgabo)
 {
@@ -339,7 +323,6 @@ int mgag200_bo_create(struct drm_device *dev, int size, int align,
 		return ret;
 	}
 
-	mgabo->gem.driver_private = NULL;
 	mgabo->bo.bdev = &mdev->ttm.bdev;
 	mgabo->bo.bdev->dev_mapping = dev->dev_mapping;
 
@@ -372,6 +355,7 @@ int mgag200_bo_pin(struct mgag200_bo *bo, u32 pl_flag, u64 *gpu_addr)
 		bo->pin_count++;
 		if (gpu_addr)
 			*gpu_addr = mgag200_bo_gpu_offset(bo);
+		return 0;
 	}
 
 	mgag200_ttm_placement(bo, pl_flag);

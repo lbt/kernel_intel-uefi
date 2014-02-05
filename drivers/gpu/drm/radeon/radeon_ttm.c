@@ -142,7 +142,7 @@ static int radeon_init_mem_type(struct ttm_bo_device *bdev, uint32_t type,
 		man->flags = TTM_MEMTYPE_FLAG_MAPPABLE | TTM_MEMTYPE_FLAG_CMA;
 #if __OS_HAS_AGP
 		if (rdev->flags & RADEON_IS_AGP) {
-			if (!(drm_core_has_AGP(rdev->ddev) && rdev->ddev->agp)) {
+			if (!rdev->ddev->agp) {
 				DRM_ERROR("AGP is not enabled for memory type %u\n",
 					  (unsigned)type);
 				return -EINVAL;
@@ -203,7 +203,9 @@ static void radeon_evict_flags(struct ttm_buffer_object *bo,
 
 static int radeon_verify_access(struct ttm_buffer_object *bo, struct file *filp)
 {
-	return 0;
+	struct radeon_bo *rbo = container_of(bo, struct radeon_bo, tbo);
+
+	return drm_vma_node_verify_access(&rbo->gem_base.vma_node, filp);
 }
 
 static void radeon_move_null(struct ttm_buffer_object *bo,

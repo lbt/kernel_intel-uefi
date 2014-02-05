@@ -38,10 +38,10 @@
  *
  * I915_L3_PARITY_UEVENT - Generated when the driver receives a parity mismatch
  *	event from the gpu l3 cache. Additional information supplied is ROW,
- *	BANK, SUBBANK of the affected cacheline. Userspace should keep track of
- *	these events and if a specific cache-line seems to have a persistent
- *	error remap it with the l3 remapping tool supplied in intel-gpu-tools.
- *	The value supplied with the event is always 1.
+ *	BANK, SUBBANK, SLICE of the affected cacheline. Userspace should keep
+ *	track of these events and if a specific cache-line seems to have a
+ *	persistent error remap it with the l3 remapping tool supplied in
+ *	intel-gpu-tools.  The value supplied with the event is always 1.
  *
  * I915_ERROR_UEVENT - Generated upon error detection, currently only via
  *	hangcheck. The error detection event is a good indicator of when things
@@ -63,34 +63,6 @@
 #define I915_NR_TEX_REGIONS 255	/* table size 2k - maximum due to use
 				 * of chars for next/prev indices */
 #define I915_LOG_MIN_TEX_REGION_SIZE 14
-#define MAX_CSC_COEFFICIENTS 9
-#define PLANEA		1
-#define SPRITEA		2
-#define SPRITEB		3
-#define PLANEB		4
-#define SPRITEC		5
-#define SPRITED		6
-#define CURSORA		7
-#define CURSORB		8
-#define PIPEA		9
-#define PIPEB		10
-
-struct drm_intel_csc_params {
-	float   m_CSCCoeff[MAX_CSC_COEFFICIENTS];
-};
-
-union CSC_COEFFICIENT_WG {
-	unsigned int  Value;
-	struct {
-	unsigned int Coeff_2:16; /* bit 0-15 */
-	unsigned int  Coeff_1:16; /* bits 16-32 */
-	};
-};
-
-struct CSC_Coeff {
-	unsigned int crtc_id;
-	union CSC_COEFFICIENT_WG VLV_CSC_Coeff[6];
-};
 
 typedef struct _drm_i915_init {
 	enum {
@@ -250,18 +222,7 @@ typedef struct _drm_i915_sarea {
 #define DRM_I915_GEM_SET_CACHING	0x2f
 #define DRM_I915_GEM_GET_CACHING	0x30
 #define DRM_I915_REG_READ		0x31
-#define DRM_I915_SET_PLANE_ZORDER	0x32
-#define DRM_I915_EDP_PSR_CTL            0x33
-#define DRM_I915_EDP_PSR_EXIT           0x34
-#define DRM_I915_DISP_SCREEN_CONTROL	0x35
-#define DRM_I915_SET_PLANE_180_ROTATION 0x36
-#define DRM_I915_ENABLE_PLANE_RESERVED_REG_BIT_2	0x37
-#define DRM_I915_GEM_USERPTR		0x38
-#define DRM_I915_SET_CSC                0x39
-#define DRM_I915_GET_PSR_SUPPORT	0X3a
-#define DRM_I915_SET_PLANE_ALPHA	0x3d
-#define DRM_I915_DPST_CONTEXT		0x3c
-#define DRM_I915_GEM_ACCESS_USERDATA	0x3e
+#define DRM_I915_GET_RESET_STATS	0x32
 
 #define DRM_IOCTL_I915_INIT		DRM_IOW( DRM_COMMAND_BASE + DRM_I915_INIT, drm_i915_init_t)
 #define DRM_IOCTL_I915_FLUSH		DRM_IO ( DRM_COMMAND_BASE + DRM_I915_FLUSH)
@@ -311,38 +272,7 @@ typedef struct _drm_i915_sarea {
 #define DRM_IOCTL_I915_GEM_CONTEXT_CREATE	DRM_IOWR (DRM_COMMAND_BASE + DRM_I915_GEM_CONTEXT_CREATE, struct drm_i915_gem_context_create)
 #define DRM_IOCTL_I915_GEM_CONTEXT_DESTROY	DRM_IOW (DRM_COMMAND_BASE + DRM_I915_GEM_CONTEXT_DESTROY, struct drm_i915_gem_context_destroy)
 #define DRM_IOCTL_I915_REG_READ			DRM_IOWR (DRM_COMMAND_BASE + DRM_I915_REG_READ, struct drm_i915_reg_read)
-#define DRM_IOCTL_I915_ENABLE_PLANE_RESERVED_REG_BIT_2	\
-	DRM_IOW(DRM_COMMAND_BASE + DRM_I915_ENABLE_PLANE_RESERVED_REG_BIT_2, \
-	struct drm_i915_enable_plane_reserved_reg_bit_2)
-#define DRM_IOCTL_I915_SET_PLANE_ZORDER		\
-			DRM_IOW(DRM_COMMAND_BASE + DRM_I915_SET_PLANE_ZORDER, \
-			struct drm_i915_set_plane_zorder)
-#define DRM_IOCTL_I915_EDP_PSR_CTL	DRM_IOW(DRM_COMMAND_BASE + \
-			DRM_I915_EDP_PSR_CTL, struct drm_i915_edp_psr_ctl)
-#define DRM_IOCTL_I915_EDP_PSR_EXIT	DRM_IO(DRM_COMMAND_BASE + \
-							DRM_I915_EDP_PSR_EXIT)
-#define DRM_IOCTL_I915_DISP_SCREEN_CONTROL             \
-		DRM_IOW(DRM_COMMAND_BASE + DRM_I915_DISP_SCREEN_CONTROL, \
-		struct drm_i915_disp_screen_control)
-#define DRM_IOCTL_I915_SET_CSC DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_SET_CSC, \
-		struct CSC_Coeff)
-#define DRM_IOCTL_I915_GET_PSR_SUPPORT	DRM_IOR(DRM_COMMAND_BASE + \
-						DRM_I915_GET_PSR_SUPPORT, bool)
-#define DRM_IOCTL_I915_SET_PLANE_ALPHA		\
-			DRM_IOW(DRM_COMMAND_BASE + DRM_I915_SET_PLANE_ALPHA, \
-			struct drm_i915_set_plane_alpha)
-#define DRM_IOCTL_I915_SET_PLANE_180_ROTATION  \
-		DRM_IOW(DRM_COMMAND_BASE + DRM_I915_SET_PLANE_180_ROTATION, \
-		struct drm_i915_plane_180_rotation)
-#define DRM_IOCTL_I915_GEM_ACCESS_USERDATA  \
-		DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_GEM_ACCESS_USERDATA, \
-		struct drm_i915_gem_access_userdata)
-#define DRM_IOCTL_I915_DPST_CONTEXT  \
-		DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_DPST_CONTEXT, \
-		struct dpst_initialize_context)
-#define DRM_IOCTL_I915_GEM_USERPTR  \
-		DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_GEM_USERPTR, \
-		struct drm_i915_gem_userptr)
+#define DRM_IOCTL_I915_GET_RESET_STATS		DRM_IOWR (DRM_COMMAND_BASE + DRM_I915_GET_RESET_STATS, struct drm_i915_reset_stats)
 
 /* Allow drivers to submit batchbuffers directly to hardware, relying
  * on the security mechanisms provided by hardware.
@@ -378,11 +308,6 @@ typedef struct drm_i915_irq_wait {
 	int irq_seq;
 } drm_i915_irq_wait_t;
 
-struct drm_i915_edp_psr_ctl {
-	int state;
-	int idle_frames;
-};
-
 /* Ioctl to query kernel params:
  */
 #define I915_PARAM_IRQ_ACTIVE            1
@@ -405,14 +330,13 @@ struct drm_i915_edp_psr_ctl {
 #define I915_PARAM_HAS_ALIASING_PPGTT	 18
 #define I915_PARAM_HAS_WAIT_TIMEOUT	 19
 #define I915_PARAM_HAS_SEMAPHORES	 20
-#define I915_PARAM_HAS_VMAP		 21
+#define I915_PARAM_HAS_PRIME_VMAP_FLUSH	 21
 #define I915_PARAM_HAS_VEBOX		 22
 #define I915_PARAM_HAS_SECURE_BATCHES	 23
 #define I915_PARAM_HAS_PINNED_BATCHES	 24
 #define I915_PARAM_HAS_EXEC_NO_RELOC	 25
 #define I915_PARAM_HAS_EXEC_HANDLE_LUT   26
 #define I915_PARAM_HAS_WT     	 	 27
-#define I915_PARAM_HAS_DPST		 28
 
 typedef struct drm_i915_getparam {
 	int param;
@@ -951,21 +875,6 @@ struct drm_i915_gem_get_tiling {
 	__u32 swizzle_mode;
 };
 
-struct drm_i915_gem_access_userdata {
-	 /** Handle of the buffer whose userdata will be accessed */
-	 __u32 handle;
-
-	 /**
-	 * Userdata: This quantity is user defined
-	 */
-	 __u32 userdata;
-
-	 /**
-	 * Write: 0=read userdata, 1=write userdata
-	 */
-	 __u32 write;
-};
-
 struct drm_i915_gem_get_aperture {
 	/** Total size of the aperture used by i915_gem_execbuffer, in bytes */
 	__u64 aper_size;
@@ -1124,113 +1033,20 @@ struct drm_i915_reg_read {
 	__u64 val; /* Return value */
 };
 
-struct drm_i915_enable_plane_reserved_reg_bit_2 {
-	__u32 enable;
-	int plane;
-	int crtc_id;
-};
-
-struct drm_i915_set_plane_zorder {
-	__u32 order;
-};
-
-struct drm_i915_disp_screen_control {
-	__u32 on_off_cntrl;
-	__u32 crtc_id;
-};
-
-struct drm_i915_plane_180_rotation {
-	__u32 crtc_id;
-	__u32 rotate;
-};
-
-struct drm_i915_gem_userptr {
-	__u64 user_ptr;
-	__u32 user_size;
+struct drm_i915_reset_stats {
+	__u32 ctx_id;
 	__u32 flags;
-#define I915_USERPTR_READ_ONLY 0x1
-#define I915_USERPTR_UNSYNCHRONIZED 0x80000000
-	/**
-	 * Returned handle for the object.
-	 *
-	 * Object handles are nonzero.
-	 */
-	__u32 handle;
-};
-/* Total number of DIET entries */
-#define	DPST_DIET_ENTRY_COUNT	33
-/* Value to reset image enhancement interrupt register */
-#define DPST_RESET_IE		0x40004000
-/* No dpst adjustment for backlight, i.e, 100% of the user specified
-   backlight will be applied (dpst will not reduce the backlight). */
-#define DPST_MAX_FACTOR		10000
-/* Threshold that will generate interrupts when crossed */
-#define DEFAULT_GUARDBAND_VAL 30
 
-struct dpst_ie {
-	enum dpst_diet_alg {
-		i915_DPST_RGB_TRANSLATOR = 0,
-		i915_DPST_YUV_ADDER,
-		i915_DPST_HSV_MULTIPLIER
-	} diet_algorithm;
-	__u32  base_lut_index;	/* Base lut index (192 for legacy mode)*/
-	__u32  factor_present[DPST_DIET_ENTRY_COUNT];
-	__u32  factor_new[DPST_DIET_ENTRY_COUNT];
-	__u32  factor_scalar;
+	/* All resets since boot/module reload, for all contexts */
+	__u32 reset_count;
+
+	/* Number of batches lost when active in GPU, for this context */
+	__u32 batch_active;
+
+	/* Number of batches lost pending for execution, for this context */
+	__u32 batch_pending;
+
+	__u32 pad;
 };
 
-struct dpst_ie_container {
-	struct dpst_ie dpst_ie_st;
-	__u32	dpst_blc_factor;
-	__u32	pipe_n;
-};
-
-struct dpst_initialize_data {
-	__u32 pipe_n;
-	__u32 threshold_gb;
-	__u32 gb_delay;
-	__u32 hist_reg_values;
-	__u32 image_res;
-	__u32 sig_num;
-};
-
-struct dpst_histogram {
-	__u16	event;
-	__u32	status[32];
-	__u32	threshold[12];
-	__u32	gb_val;
-	__u32	gb_int_delay;
-	__u32   bkl_val;
-	enum dpst_hist_mode {
-		i915_DPST_YUV_LUMA_MODE = 0,
-		i915_DPST_HSV_INTENSITY_MODE
-	} hist_mode;
-};
-
-struct dpst_histogram_status {
-	__u32	pipe_n;
-	__u32   dpst_disable;
-	struct dpst_histogram histogram_bins;
-};
-
-struct dpst_initialize_context {
-	enum dpst_call_type {
-		DPST_ENABLE = 1,
-		DPST_DISABLE,
-		DPST_INIT_DATA,
-		DPST_GET_BIN_DATA,
-		DPST_APPLY_LUMA,
-		DPST_RESET_HISTOGRAM_STATUS
-	} dpst_ioctl_type;
-	union {
-		struct dpst_initialize_data	init_data;
-		struct dpst_ie_container	ie_container;
-		struct dpst_histogram_status	hist_status;
-	};
-};
-
-struct drm_i915_set_plane_alpha {
-	int plane;
-	int alpha;
-};
 #endif /* _UAPI_I915_DRM_H_ */

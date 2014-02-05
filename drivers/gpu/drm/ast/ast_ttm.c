@@ -148,7 +148,9 @@ ast_bo_evict_flags(struct ttm_buffer_object *bo, struct ttm_placement *pl)
 
 static int ast_bo_verify_access(struct ttm_buffer_object *bo, struct file *filp)
 {
-	return 0;
+	struct ast_bo *astbo = ast_bo(bo);
+
+	return drm_vma_node_verify_access(&astbo->gem.vma_node, filp);
 }
 
 static int ast_ttm_io_mem_reserve(struct ttm_bo_device *bdev,
@@ -303,24 +305,6 @@ void ast_ttm_placement(struct ast_bo *bo, int domain)
 	bo->placement.num_busy_placement = c;
 }
 
-int ast_bo_reserve(struct ast_bo *bo, bool no_wait)
-{
-	int ret;
-
-	ret = ttm_bo_reserve(&bo->bo, true, no_wait, false, 0);
-	if (ret) {
-		if (ret != -ERESTARTSYS && ret != -EBUSY)
-			DRM_ERROR("reserve failed %p\n", bo);
-		return ret;
-	}
-	return 0;
-}
-
-void ast_bo_unreserve(struct ast_bo *bo)
-{
-	ttm_bo_unreserve(&bo->bo);
-}
-
 int ast_bo_create(struct drm_device *dev, int size, int align,
 		  uint32_t flags, struct ast_bo **pastbo)
 {
@@ -339,7 +323,6 @@ int ast_bo_create(struct drm_device *dev, int size, int align,
 		return ret;
 	}
 
-	astbo->gem.driver_private = NULL;
 	astbo->bo.bdev = &ast->ttm.bdev;
 	astbo->bo.bdev->dev_mapping = dev->dev_mapping;
 

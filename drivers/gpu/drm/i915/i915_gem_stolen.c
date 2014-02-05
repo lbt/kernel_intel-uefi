@@ -94,29 +94,34 @@ static int i915_setup_compression(struct drm_device *dev, int size)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	struct drm_mm_node *compressed_fb, *uninitialized_var(compressed_llb);
+	int ret;
+
+	compressed_fb = kzalloc(sizeof(*compressed_fb), GFP_KERNEL);
+	if (!compressed_fb)
+		goto err_llb;
 
 	/* Try to over-allocate to reduce reallocations and fragmentation */
-	compressed_fb = drm_mm_search_free(&dev_priv->mm.stolen,
-					   size <<= 1, 4096, 0);
-	if (!compressed_fb)
-		compressed_fb = drm_mm_search_free(&dev_priv->mm.stolen,
-						   size >>= 1, 4096, 0);
-	if (compressed_fb)
-		compressed_fb = drm_mm_get_block(compressed_fb, size, 4096);
-	if (!compressed_fb)
-		goto err;
+	ret = drm_mm_insert_node(&dev_priv->mm.stolen, compressed_fb,
+				 size <<= 1, 4096, DRM_MM_SEARCH_DEFAULT);
+	if (ret)
+		ret = drm_mm_insert_node(&dev_priv->mm.stolen, compressed_fb,
+					 size >>= 1, 4096,
+					 DRM_MM_SEARCH_DEFAULT);
+	if (ret)
+		goto err_llb;
 
 	if (HAS_PCH_SPLIT(dev))
 		I915_WRITE(ILK_DPFC_CB_BASE, compressed_fb->start);
 	else if (IS_GM45(dev)) {
 		I915_WRITE(DPFC_CB_BASE, compressed_fb->start);
 	} else {
-		compressed_llb = drm_mm_search_free(&dev_priv->mm.stolen,
-						    4096, 4096, 0);
-		if (compressed_llb)
-			compressed_llb = drm_mm_get_block(compressed_llb,
-							  4096, 4096);
+		compressed_llb = kzalloc(sizeof(*compressed_llb), GFP_KERNEL);
 		if (!compressed_llb)
+			goto err_fb;
+
+		ret = drm_mm_insert_node(&dev_priv->mm.stolen, compressed_llb,
+					 4096, 4096, DRM_MM_SEARCH_DEFAULT);
+		if (ret)
 			goto err_fb;
 
 		dev_priv->fbc.compressed_llb = compressed_llb;
@@ -136,8 +141,10 @@ static int i915_setup_compression(struct drm_device *dev, int size)
 	return 0;
 
 err_fb:
-	drm_mm_put_block(compressed_fb);
-err:
+	kfree(compressed_llb);
+	drm_mm_remove_node(compressed_fb);
+err_llb:
+	kfree(compressed_fb);
 	pr_info_once("drm: not enough stolen space for compressed buffer (need %d more bytes), disabling. Hint: you may be able to increase stolen memory size in the BIOS to avoid this.\n", size);
 	return -ENOSPC;
 }
@@ -165,11 +172,15 @@ void i915_gem_stolen_cleanup_compression(struct drm_device *dev)
 	if (dev_priv->fbc.size == 0)
 		return;
 
-	if (dev_priv->fbc.compressed_fb)
-		drm_mm_put_block(dev_priv->fbc.compressed_fb);
+	if (dev_priv->fbc.compressed_fb) {
+		drm_mm_remove_node(dev_priv->fbc.compressed_fb);
+		kfree(dev_priv->fbc.compressed_fb);
+	}
 
-	if (dev_priv->fbc.compressed_llb)
-		drm_mm_put_block(dev_priv->fbc.compressed_llb);
+	if (dev_priv->fbc.compressed_llb) {
+		drm_mm_remove_node(dev_priv->fbc.compressed_llb);
+		kfree(dev_priv->fbc.compressed_llb);
+	}
 
 	dev_priv->fbc.size = 0;
 }
@@ -189,6 +200,9 @@ int i915_gem_init_stolen(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	int bios_reserved = 0;
+
+	if (dev_priv->gtt.stolen_size == 0)
+		return 0;
 
 	dev_priv->mm.stolen_base = i915_stolen_to_physical(dev);
 	if (dev_priv->mm.stolen_base == 0)
@@ -273,9 +287,7 @@ _i915_gem_object_create_stolen(struct drm_device *dev,
 	if (obj == NULL)
 		return NULL;
 
-	if (drm_gem_private_object_init(dev, &obj->base, stolen->size))
-		goto cleanup;
-
+	drm_gem_private_object_init(dev, &obj->base, stolen->size);
 	i915_gem_object_init(obj, &i915_gem_object_stolen_ops);
 
 	obj->pages = i915_pages_create_for_stolen(dev,
@@ -303,6 +315,7 @@ i915_gem_object_create_stolen(struct drm_device *dev, u32 size)
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	struct drm_i915_gem_object *obj;
 	struct drm_mm_node *stolen;
+	int ret;
 
 	if (!drm_mm_initialized(&dev_priv->mm.stolen))
 		return NULL;
@@ -311,17 +324,23 @@ i915_gem_object_create_stolen(struct drm_device *dev, u32 size)
 	if (size == 0)
 		return NULL;
 
-	stolen = drm_mm_search_free(&dev_priv->mm.stolen, size, 4096, 0);
-	if (stolen)
-		stolen = drm_mm_get_block(stolen, size, 4096);
-	if (stolen == NULL)
+	stolen = kzalloc(sizeof(*stolen), GFP_KERNEL);
+	if (!stolen)
 		return NULL;
+
+	ret = drm_mm_insert_node(&dev_priv->mm.stolen, stolen, size,
+				 4096, DRM_MM_SEARCH_DEFAULT);
+	if (ret) {
+		kfree(stolen);
+		return NULL;
+	}
 
 	obj = _i915_gem_object_create_stolen(dev, stolen);
 	if (obj)
 		return obj;
 
-	drm_mm_put_block(stolen);
+	drm_mm_remove_node(stolen);
+	kfree(stolen);
 	return NULL;
 }
 
@@ -367,7 +386,8 @@ i915_gem_object_create_stolen_for_preallocated(struct drm_device *dev,
 	obj = _i915_gem_object_create_stolen(dev, stolen);
 	if (obj == NULL) {
 		DRM_DEBUG_KMS("failed to allocate stolen object\n");
-		drm_mm_put_block(stolen);
+		drm_mm_remove_node(stolen);
+		kfree(stolen);
 		return NULL;
 	}
 
@@ -375,7 +395,7 @@ i915_gem_object_create_stolen_for_preallocated(struct drm_device *dev,
 	if (gtt_offset == I915_GTT_OFFSET_NONE)
 		return obj;
 
-	vma = i915_gem_vma_create(obj, ggtt);
+	vma = i915_gem_obj_lookup_or_create_vma(obj, ggtt);
 	if (IS_ERR(vma)) {
 		ret = PTR_ERR(vma);
 		goto err_out;
@@ -406,7 +426,8 @@ i915_gem_object_create_stolen_for_preallocated(struct drm_device *dev,
 err_vma:
 	i915_gem_vma_destroy(vma);
 err_out:
-	drm_mm_put_block(stolen);
+	drm_mm_remove_node(stolen);
+	kfree(stolen);
 	drm_gem_object_unreference(&obj->base);
 	return NULL;
 }
@@ -415,7 +436,8 @@ void
 i915_gem_object_release_stolen(struct drm_i915_gem_object *obj)
 {
 	if (obj->stolen) {
-		drm_mm_put_block(obj->stolen);
+		drm_mm_remove_node(obj->stolen);
+		kfree(obj->stolen);
 		obj->stolen = NULL;
 	}
 }

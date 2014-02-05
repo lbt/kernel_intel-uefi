@@ -8,7 +8,6 @@ i915-y := i915_drv.o i915_dma.o i915_irq.o \
 	  i915_gpu_error.o \
           i915_suspend.o \
 	  i915_gem.o \
-	  i915_gem_userptr.o \
 	  i915_gem_context.o \
 	  i915_gem_debug.o \
 	  i915_gem_evict.o \
@@ -19,7 +18,6 @@ i915-y := i915_drv.o i915_dma.o i915_irq.o \
 	  i915_sysfs.o \
 	  i915_trace_points.o \
 	  i915_ums.o \
-	  i915_rpm.o \
 	  intel_display.o \
 	  intel_crt.o \
 	  intel_lvds.o \
@@ -35,7 +33,6 @@ i915-y := i915_drv.o i915_dma.o i915_irq.o \
 	  intel_panel.o \
 	  intel_pm.o \
 	  intel_i2c.o \
-	  intel_fb.o \
 	  intel_tv.o \
 	  intel_dvo.o \
 	  intel_ringbuffer.o \
@@ -44,21 +41,19 @@ i915-y := i915_drv.o i915_dma.o i915_irq.o \
 	  intel_opregion.o \
 	  intel_sideband.o \
 	  intel_uncore.o \
-	  intel_clrmgr.o \
 	  dvo_ch7xxx.o \
 	  dvo_ch7017.o \
 	  dvo_ivch.o \
 	  dvo_tfp410.o \
 	  dvo_sil164.o \
 	  dvo_ns2501.o \
-	  i915_gem_dmabuf.o	\
-	  i915_dpst.o \
-	  dsi_mod_auo_b080xat.o	\
-	  dsi_mod_panasonic_vvx09f006a00.o
+	  i915_gem_dmabuf.o
 
 i915-$(CONFIG_COMPAT)   += i915_ioc32.o
 
 i915-$(CONFIG_ACPI)	+= intel_acpi.o
+
+i915-$(CONFIG_DRM_I915_FBDEV) += intel_fbdev.o
 
 obj-$(CONFIG_DRM_I915)  += i915.o
 

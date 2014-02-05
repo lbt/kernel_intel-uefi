@@ -142,7 +142,6 @@ int radeon_bo_create(struct radeon_device *rdev,
 		return r;
 	}
 	bo->rdev = rdev;
-	bo->gem_base.driver_private = NULL;
 	bo->surface_reg = -1;
 	INIT_LIST_HEAD(&bo->list);
 	INIT_LIST_HEAD(&bo->va);
@@ -349,14 +348,15 @@ void radeon_bo_list_add_object(struct radeon_bo_list *lobj,
 	}
 }
 
-int radeon_bo_list_validate(struct list_head *head, int ring)
+int radeon_bo_list_validate(struct ww_acquire_ctx *ticket,
+			    struct list_head *head, int ring)
 {
 	struct radeon_bo_list *lobj;
 	struct radeon_bo *bo;
 	u32 domain;
 	int r;
 
-	r = ttm_eu_reserve_buffers(head);
+	r = ttm_eu_reserve_buffers(ticket, head);
 	if (unlikely(r != 0)) {
 		return r;
 	}
@@ -376,6 +376,7 @@ int radeon_bo_list_validate(struct list_head *head, int ring)
 					domain = lobj->alt_domain;
 					goto retry;
 				}
+				ttm_eu_backoff_reservation(ticket, head);
 				return r;
 			}
 		}
@@ -399,7 +400,7 @@ int radeon_bo_get_surface_reg(struct radeon_bo *bo)
 	int steal;
 	int i;
 
-	BUG_ON(!radeon_bo_is_reserved(bo));
+	lockdep_assert_held(&bo->tbo.resv->lock.base);
 
 	if (!bo->tiling_flags)
 		return 0;
@@ -525,7 +526,8 @@ void radeon_bo_get_tiling_flags(struct radeon_bo *bo,
 				uint32_t *tiling_flags,
 				uint32_t *pitch)
 {
-	BUG_ON(!radeon_bo_is_reserved(bo));
+	lockdep_assert_held(&bo->tbo.resv->lock.base);
+
 	if (tiling_flags)
 		*tiling_flags = bo->tiling_flags;
 	if (pitch)
@@ -535,7 +537,8 @@ void radeon_bo_get_tiling_flags(struct radeon_bo *bo,
 int radeon_bo_check_tiling(struct radeon_bo *bo, bool has_moved,
 				bool force_drop)
 {
-	BUG_ON(!radeon_bo_is_reserved(bo) && !force_drop);
+	if (!force_drop)
+		lockdep_assert_held(&bo->tbo.resv->lock.base);
 
 	if (!(bo->tiling_flags & RADEON_TILING_SURFACE))
 		return 0;
@@ -617,27 +620,4 @@ int radeon_bo_wait(struct radeon_bo *bo, u32 *mem_type, bool no_wait)
 	spin_unlock(&bo->tbo.bdev->fence_lock);
 	ttm_bo_unreserve(&bo->tbo);
 	return r;
-}
-
-
-/**
- * radeon_bo_reserve - reserve bo
- * @bo:		bo structure
- * @no_intr:	don't return -ERESTARTSYS on pending signal
- *
- * Returns:
- * -ERESTARTSYS: A wait for the buffer to become unreserved was interrupted by
- * a signal. Release all buffer reservations and return to user-space.
- */
-int radeon_bo_reserve(struct radeon_bo *bo, bool no_intr)
-{
-	int r;
-
-	r = ttm_bo_reserve(&bo->tbo, !no_intr, false, false, 0);
-	if (unlikely(r != 0)) {
-		if (r != -ERESTARTSYS)
-			dev_err(bo->rdev->dev, "%p reserve failed\n", bo);
-		return r;
-	}
-	return 0;
 }
