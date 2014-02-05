@@ -217,14 +217,6 @@ config DRM_SAVAGE
 	  Choose this option if you have a Savage3D/4/SuperSavage/Pro/Twister
 	  chipset. If M is selected the module will be called savage.
 
-config DRM_VXD_BYT
-       bool "Enable vxd on intel by default"
-       depends on DRM_I915
-       default n
-       select DRM_TTM
-       help
-         Choose this option if you want to enable VXD decoding for Baylake platform
-
 source "drivers/gpu/drm/exynos/Kconfig"
 
 source "drivers/gpu/drm/vmwgfx/Kconfig"
