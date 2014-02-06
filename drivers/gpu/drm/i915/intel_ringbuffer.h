@@ -33,12 +33,8 @@ struct  intel_hw_status_page {
 #define I915_READ_IMR(ring) I915_READ(RING_IMR((ring)->mmio_base))
 #define I915_WRITE_IMR(ring, val) I915_WRITE(RING_IMR((ring)->mmio_base), val)
 
-#define I915_READ_MODE(ring) \
-	I915_READ(RING_MI_MODE((ring)->mmio_base))
-#define I915_WRITE_MODE(ring, val) \
-	I915_WRITE(RING_MI_MODE((ring)->mmio_base), val)
-
 enum intel_ring_hangcheck_action {
+	HANGCHECK_IDLE = 0,
 	HANGCHECK_WAIT,
 	HANGCHECK_ACTIVE,
 	HANGCHECK_KICK,
@@ -111,9 +107,8 @@ struct  intel_ring_buffer {
 				     u32 seqno);
 	int		(*dispatch_execbuffer)(struct intel_ring_buffer *ring,
 					       u32 offset, u32 length,
-					       unsigned flags,
-					       void *priv_data,
-					       u32 priv_length);
+					       void *priv_data, u32 priv_length,
+					       unsigned flags);
 #define I915_DISPATCH_SECURE 0x1
 #define I915_DISPATCH_PINNED 0x2
 	void		(*cleanup)(struct intel_ring_buffer *ring);
@@ -125,10 +120,6 @@ struct  intel_ring_buffer {
 	u32		semaphore_register[I915_NUM_RINGS];
 	/* mboxes this ring signals to */
 	u32		signal_mbox[I915_NUM_RINGS];
-
-	int		(*start)(struct intel_ring_buffer *ring);
-	int		(*stop)(struct intel_ring_buffer *ring);
-	int		(*invalidate_tlb)(struct intel_ring_buffer *ring);
 
 	/**
 	 * List of objects currently involved in rendering from the
@@ -151,7 +142,8 @@ struct  intel_ring_buffer {
 	/**
 	 * Do we have some not yet emitted requests outstanding?
 	 */
-	u32 outstanding_lazy_request;
+	struct drm_i915_gem_request *preallocated_lazy_request;
+	u32 outstanding_lazy_seqno;
 	bool gpu_caches_dirty;
 	bool fbc_dirty;
 
@@ -166,7 +158,36 @@ struct  intel_ring_buffer {
 
 	struct intel_ring_hangcheck hangcheck;
 
-	void *private;
+	struct {
+		struct drm_i915_gem_object *obj;
+		u32 gtt_offset;
+		volatile u32 *cpu_page;
+	} scratch;
+
+	/**
+	 * Tables of commands the command parser needs to know about
+	 * for this ring.
+	 */
+	const struct drm_i915_cmd_table *cmd_tables;
+	int cmd_table_count;
+
+	/**
+	 * Table of registers allowed in commands that read/write registers.
+	 */
+	const unsigned int *reg_table;
+	int reg_count;
+
+	/**
+	 * Returns the bitmask for the length field of the specified command.
+	 * Return 0 for an unrecognized/invalid command.
+	 *
+	 * If the command parser finds an entry for a command in the ring's
+	 * cmd_tables, it gets the command's length based on the table entry.
+	 * If not, it calls this function to determine the per-ring length field
+	 * encoding for the command (i.e. certain opcode ranges use certain bits
+	 * to encode the command length in the header).
+	 */
+	unsigned int (*get_cmd_length_mask)(unsigned int cmd_header);
 };
 
 static inline bool
@@ -244,7 +265,12 @@ static inline void intel_ring_emit(struct intel_ring_buffer *ring,
 	iowrite32(data, ring->virtual_start + ring->tail);
 	ring->tail += 4;
 }
-void intel_ring_advance(struct intel_ring_buffer *ring);
+static inline void intel_ring_advance(struct intel_ring_buffer *ring)
+{
+	ring->tail &= ring->size - 1;
+}
+void __intel_ring_advance(struct intel_ring_buffer *ring);
+
 int __must_check intel_ring_idle(struct intel_ring_buffer *ring);
 void intel_ring_init_seqno(struct intel_ring_buffer *ring, u32 seqno);
 int intel_ring_flush_all_caches(struct intel_ring_buffer *ring);
@@ -265,8 +291,8 @@ static inline u32 intel_ring_get_tail(struct intel_ring_buffer *ring)
 
 static inline u32 intel_ring_get_seqno(struct intel_ring_buffer *ring)
 {
-	BUG_ON(ring->outstanding_lazy_request == 0);
-	return ring->outstanding_lazy_request;
+	BUG_ON(ring->outstanding_lazy_seqno == 0);
+	return ring->outstanding_lazy_seqno;
 }
 
 static inline void i915_trace_irq_get(struct intel_ring_buffer *ring, u32 seqno)

@@ -28,7 +28,6 @@
 #define _UAPI_I915_DRM_H_
 
 #include <drm/drm.h>
-#include <drm/i915_perfmon.h>
 
 /* Please note that modifications to all structs defined here are
  * subject to backwards-compatibility constraints.
@@ -39,10 +38,10 @@
  *
  * I915_L3_PARITY_UEVENT - Generated when the driver receives a parity mismatch
  *	event from the gpu l3 cache. Additional information supplied is ROW,
- *	BANK, SUBBANK of the affected cacheline. Userspace should keep track of
- *	these events and if a specific cache-line seems to have a persistent
- *	error remap it with the l3 remapping tool supplied in intel-gpu-tools.
- *	The value supplied with the event is always 1.
+ *	BANK, SUBBANK, SLICE of the affected cacheline. Userspace should keep
+ *	track of these events and if a specific cache-line seems to have a
+ *	persistent error remap it with the l3 remapping tool supplied in
+ *	intel-gpu-tools.  The value supplied with the event is always 1.
  *
  * I915_ERROR_UEVENT - Generated upon error detection, currently only via
  *	hangcheck. The error detection event is a good indicator of when things
@@ -73,8 +72,6 @@
 #define SPRITED		6
 #define CURSORA		7
 #define CURSORB		8
-#define PIPEA		9
-#define PIPEB		10
 
 struct drm_intel_csc_params {
 	float   m_CSCCoeff[MAX_CSC_COEFFICIENTS];
@@ -182,6 +179,29 @@ typedef struct _drm_i915_sarea {
 
 } drm_i915_sarea_t;
 
+#define CSC_MAX_COEFF_REG_COUNT		6
+#define CSC_MAX_OFFSET_COUNT		3
+
+#define CSC_COEFF_VALID_MASK		0x1
+#define CSC_OFFSET_VALID_MASK		0x2
+#define CSC_MODE_VALID_MASK		0x4
+
+struct csc_coeff {
+	unsigned int crtc_id;
+	/*
+	 * param_valid : Bits
+	 * XXX1b : Coeff Valid
+	 * XX1Xb : Offset Valid
+	 * X1XXb : Mode Valid
+	 * X000b : Invalid
+	 */
+	unsigned int param_valid;
+	unsigned int csc_coeff[CSC_MAX_COEFF_REG_COUNT];
+	unsigned int csc_preoffset[CSC_MAX_OFFSET_COUNT];
+	unsigned int csc_postoffset[CSC_MAX_OFFSET_COUNT];
+	unsigned int csc_mode;
+};
+
 /* due to userspace building against these headers we need some compat here */
 #define planeA_x pipeA_x
 #define planeA_y pipeA_y
@@ -252,18 +272,14 @@ typedef struct _drm_i915_sarea {
 #define DRM_I915_GEM_GET_CACHING	0x30
 #define DRM_I915_REG_READ		0x31
 #define DRM_I915_SET_PLANE_ZORDER	0x32
-#define DRM_I915_EDP_PSR_CTL            0x33
-#define DRM_I915_EDP_PSR_EXIT           0x34
-#define DRM_I915_DISP_SCREEN_CONTROL	0x35
+#define DRM_I915_GET_RESET_STATS	0x33
 #define DRM_I915_SET_PLANE_180_ROTATION 0x36
 #define DRM_I915_ENABLE_PLANE_RESERVED_REG_BIT_2	0x37
-#define DRM_I915_GEM_USERPTR		0x38
-#define DRM_I915_SET_CSC                0x39
-#define DRM_I915_GET_PSR_SUPPORT	0X3a
-#define DRM_I915_PERFMON		0x3b
+#define DRM_I915_SET_CSC		0x39
+#define DRM_I915_DPST_CONTEXT   0x3b
+#define DRM_I915_GEM_ACCESS_USERDATA	0x3c
 #define DRM_I915_SET_PLANE_ALPHA	0x3d
-#define DRM_I915_DPST_CONTEXT		0x3c
-#define DRM_I915_GEM_ACCESS_USERDATA	0x3e
+#define DRM_I915_CMD_PARSER_APPEND	0x3f
 
 #define DRM_IOCTL_I915_INIT		DRM_IOW( DRM_COMMAND_BASE + DRM_I915_INIT, drm_i915_init_t)
 #define DRM_IOCTL_I915_FLUSH		DRM_IO ( DRM_COMMAND_BASE + DRM_I915_FLUSH)
@@ -313,40 +329,29 @@ typedef struct _drm_i915_sarea {
 #define DRM_IOCTL_I915_GEM_CONTEXT_CREATE	DRM_IOWR (DRM_COMMAND_BASE + DRM_I915_GEM_CONTEXT_CREATE, struct drm_i915_gem_context_create)
 #define DRM_IOCTL_I915_GEM_CONTEXT_DESTROY	DRM_IOW (DRM_COMMAND_BASE + DRM_I915_GEM_CONTEXT_DESTROY, struct drm_i915_gem_context_destroy)
 #define DRM_IOCTL_I915_REG_READ			DRM_IOWR (DRM_COMMAND_BASE + DRM_I915_REG_READ, struct drm_i915_reg_read)
-#define DRM_IOCTL_I915_ENABLE_PLANE_RESERVED_REG_BIT_2	\
-	DRM_IOW(DRM_COMMAND_BASE + DRM_I915_ENABLE_PLANE_RESERVED_REG_BIT_2, \
-	struct drm_i915_enable_plane_reserved_reg_bit_2)
 #define DRM_IOCTL_I915_SET_PLANE_ZORDER		\
 			DRM_IOW(DRM_COMMAND_BASE + DRM_I915_SET_PLANE_ZORDER, \
 			struct drm_i915_set_plane_zorder)
-#define DRM_IOCTL_I915_EDP_PSR_CTL	DRM_IOW(DRM_COMMAND_BASE + \
-			DRM_I915_EDP_PSR_CTL, struct drm_i915_edp_psr_ctl)
-#define DRM_IOCTL_I915_EDP_PSR_EXIT	DRM_IO(DRM_COMMAND_BASE + \
-							DRM_I915_EDP_PSR_EXIT)
-#define DRM_IOCTL_I915_DISP_SCREEN_CONTROL             \
-		DRM_IOW(DRM_COMMAND_BASE + DRM_I915_DISP_SCREEN_CONTROL, \
-		struct drm_i915_disp_screen_control)
-#define DRM_IOCTL_I915_SET_CSC DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_SET_CSC, \
-		struct CSC_Coeff)
-#define DRM_IOCTL_I915_GET_PSR_SUPPORT	DRM_IOR(DRM_COMMAND_BASE + \
-						DRM_I915_GET_PSR_SUPPORT, bool)
-#define DRM_IOCTL_I915_PERFMON DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_PERFMON, \
-					struct drm_i915_perfmon)
+#define DRM_IOCTL_I915_GET_RESET_STATS		DRM_IOWR (DRM_COMMAND_BASE + DRM_I915_GET_RESET_STATS, struct drm_i915_reset_stats)
 #define DRM_IOCTL_I915_SET_PLANE_ALPHA		\
 			DRM_IOW(DRM_COMMAND_BASE + DRM_I915_SET_PLANE_ALPHA, \
 			struct drm_i915_set_plane_alpha)
 #define DRM_IOCTL_I915_SET_PLANE_180_ROTATION  \
 		DRM_IOW(DRM_COMMAND_BASE + DRM_I915_SET_PLANE_180_ROTATION, \
 		struct drm_i915_plane_180_rotation)
-#define DRM_IOCTL_I915_GEM_ACCESS_USERDATA  \
+#define DRM_IOCTL_I915_ENABLE_PLANE_RESERVED_REG_BIT_2	\
+	DRM_IOW(DRM_COMMAND_BASE + DRM_I915_ENABLE_PLANE_RESERVED_REG_BIT_2, \
+	struct drm_i915_enable_plane_reserved_reg_bit_2)
+#define DRM_IOCTL_I915_DPST_CONTEXT	DRM_IOWR(DRM_COMMAND_BASE + \
+			DRM_I915_DPST_CONTEXT, struct dpst_initialize_context)
+#define DRM_IOCTL_I915_GEM_ACCESS_USERDATA	\
 		DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_GEM_ACCESS_USERDATA, \
 		struct drm_i915_gem_access_userdata)
-#define DRM_IOCTL_I915_DPST_CONTEXT  \
-		DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_DPST_CONTEXT, \
-		struct dpst_initialize_context)
-#define DRM_IOCTL_I915_GEM_USERPTR  \
-		DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_GEM_USERPTR, \
-		struct drm_i915_gem_userptr)
+#define DRM_IOCTL_I915_SET_CSC DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_SET_CSC, \
+		struct csc_coeff)
+#define DRM_IOCTL_I915_CMD_PARSER_APPEND	\
+		DRM_IOWR(DRM_COMMAND_BASE + DRM_I915_CMD_PARSER_APPEND, \
+		struct drm_i915_cmd_parser_append)
 
 /* Allow drivers to submit batchbuffers directly to hardware, relying
  * on the security mechanisms provided by hardware.
@@ -382,11 +387,6 @@ typedef struct drm_i915_irq_wait {
 	int irq_seq;
 } drm_i915_irq_wait_t;
 
-struct drm_i915_edp_psr_ctl {
-	int state;
-	int idle_frames;
-};
-
 /* Ioctl to query kernel params:
  */
 #define I915_PARAM_IRQ_ACTIVE            1
@@ -409,14 +409,15 @@ struct drm_i915_edp_psr_ctl {
 #define I915_PARAM_HAS_ALIASING_PPGTT	 18
 #define I915_PARAM_HAS_WAIT_TIMEOUT	 19
 #define I915_PARAM_HAS_SEMAPHORES	 20
-#define I915_PARAM_HAS_VMAP		 21
+#define I915_PARAM_HAS_PRIME_VMAP_FLUSH	 21
 #define I915_PARAM_HAS_VEBOX		 22
 #define I915_PARAM_HAS_SECURE_BATCHES	 23
 #define I915_PARAM_HAS_PINNED_BATCHES	 24
 #define I915_PARAM_HAS_EXEC_NO_RELOC	 25
 #define I915_PARAM_HAS_EXEC_HANDLE_LUT   26
 #define I915_PARAM_HAS_WT     	 	 27
-#define I915_PARAM_HAS_DPST		 28
+#define I915_PARAM_HAS_CMD_PARSER	 28
+#define I915_PARAM_HAS_DPST		 29
 
 typedef struct drm_i915_getparam {
 	int param;
@@ -956,18 +957,18 @@ struct drm_i915_gem_get_tiling {
 };
 
 struct drm_i915_gem_access_userdata {
-	 /** Handle of the buffer whose userdata will be accessed */
-	 __u32 handle;
+	/** Handle of the buffer whose userdata will be accessed */
+	__u32 handle;
 
-	 /**
-	 * Userdata: This quantity is user defined
-	 */
-	 __u32 userdata;
+	/**
+	* Userdata:  This quantity is user defined
+	*/
+	__u32 userdata;
 
-	 /**
-	 * Write: 0=read userdata, 1=write userdata
-	 */
-	 __u32 write;
+	/**
+	* Write: 0=read userdata, 1=write userdata
+	*/
+	__u32 write;
 };
 
 struct drm_i915_gem_get_aperture {
@@ -1128,19 +1129,26 @@ struct drm_i915_reg_read {
 	__u64 val; /* Return value */
 };
 
-struct drm_i915_enable_plane_reserved_reg_bit_2 {
-	__u32 enable;
-	int plane;
-	int crtc_id;
-};
 
 struct drm_i915_set_plane_zorder {
 	__u32 order;
 };
 
-struct drm_i915_disp_screen_control {
-	__u32 on_off_cntrl;
-	__u32 crtc_id;
+
+struct drm_i915_reset_stats {
+	__u32 ctx_id;
+	__u32 flags;
+
+	/* All resets since boot/module reload, for all contexts */
+	__u32 reset_count;
+
+	/* Number of batches lost when active in GPU, for this context */
+	__u32 batch_active;
+
+	/* Number of batches lost pending for execution, for this context */
+	__u32 batch_pending;
+
+	__u32 pad;
 };
 
 struct drm_i915_plane_180_rotation {
@@ -1148,26 +1156,27 @@ struct drm_i915_plane_180_rotation {
 	__u32 rotate;
 };
 
-struct drm_i915_gem_userptr {
-	__u64 user_ptr;
-	__u32 user_size;
-	__u32 flags;
-#define I915_USERPTR_READ_ONLY 0x1
-#define I915_USERPTR_UNSYNCHRONIZED 0x80000000
-	/**
-	 * Returned handle for the object.
-	 *
-	 * Object handles are nonzero.
-	 */
-	__u32 handle;
+struct drm_i915_enable_plane_reserved_reg_bit_2 {
+	__u32 enable;
+	int plane;
+	int crtc_id;
 };
+
+struct drm_i915_set_plane_alpha {
+	int plane;
+	int alpha;
+};
+
 /* Total number of DIET entries */
 #define	DPST_DIET_ENTRY_COUNT	33
+
 /* Value to reset image enhancement interrupt register */
 #define DPST_RESET_IE		0x40004000
+
 /* No dpst adjustment for backlight, i.e, 100% of the user specified
    backlight will be applied (dpst will not reduce the backlight). */
 #define DPST_MAX_FACTOR		10000
+
 /* Threshold that will generate interrupts when crossed */
 #define DEFAULT_GUARDBAND_VAL 30
 
@@ -1213,7 +1222,6 @@ struct dpst_histogram {
 
 struct dpst_histogram_status {
 	__u32	pipe_n;
-	__u32   dpst_disable;
 	struct dpst_histogram histogram_bins;
 };
 
@@ -1233,8 +1241,101 @@ struct dpst_initialize_context {
 	};
 };
 
-struct drm_i915_set_plane_alpha {
-	int plane;
-	int alpha;
+
+/**
+ * A command that requires special handling by the command parser.
+ */
+struct drm_i915_cmd_descriptor {
+	/**
+	 * Flags describing how the command parser processes the command.
+	 *
+	 * CMD_DESC_FIXED: The command has a fixed length if this is set,
+	 *                 a length mask if not set
+	 * CMD_DESC_SKIP: The command is allowed but does not follow the
+	 *                standard length encoding for the opcode range in
+	 *                which it falls
+	 * CMD_DESC_REJECT: The command is never allowed
+	 * CMD_DESC_REGISTER: The command should be checked against the
+	 *                    register whitelist for the appropriate ring
+	 * CMD_DESC_BITMASK: The command has certain bits that must be checked
+	 */
+	int flags;
+#define CMD_DESC_FIXED (1 << 0)
+#define CMD_DESC_SKIP (1 << 1)
+#define CMD_DESC_REJECT (1 << 2)
+#define CMD_DESC_REGISTER (1 << 3)
+#define CMD_DESC_BITMASK (1 << 4)
+
+	/**
+	 * The command's unique identification bits and the bitmask to get them.
+	 * This isn't strictly the opcode field as defined in the spec and may
+	 * also include type, subtype, and/or subop fields.
+	 */
+	struct {
+		unsigned int value;
+		unsigned int mask;
+	} cmd;
+
+	/**
+	 * The command's length. The command is either fixed length (i.e. does
+	 * not include a length field) or has a length field mask. The flag
+	 * CMD_DESC_FIXED indicates a fixed length. Otherwise, the command has
+	 * a length mask. All command entries in a command table must include
+	 * length information.
+	 */
+	union {
+		unsigned int fixed;
+		unsigned int mask;
+	} length;
+
+	/**
+	 * Describes where to find a register address in the command to check
+	 * against the ring's register whitelist. Only valid if flags has the
+	 * CMD_DESC_REGISTER bit set.
+	 */
+	struct {
+		unsigned int offset;
+		unsigned int mask;
+	} reg;
+
+#define MAX_CMD_DESC_BITMASKS 3
+	/**
+	 * Describes command checks where a particular dword is masked and
+	 * compared against an expected value. If the command does not match
+	 * the expected value, the parser rejects it. Only valid if flags has
+	 * the CMD_DESC_BITMASK bit set.
+	 *
+	 * If the check specifies a non-zero condition_mask then the parser
+	 * only performs the check when the bits specified by condition_mask
+	 * are non-zero.
+	 */
+	struct {
+		unsigned int offset;
+		unsigned int mask;
+		unsigned int expected;
+		unsigned int condition_offset;
+		unsigned int condition_mask;
+	} bits[MAX_CMD_DESC_BITMASKS];
+	/** Number of valid entries in the bits array */
+	int bits_count;
 };
+
+/**
+ * Add command checks or whitelisted registers to the command parser. Root-only.
+ */
+struct drm_i915_cmd_parser_append {
+	/** The ring who's structures are to be updated; use I915_EXEC_* bits */
+	__u32 ring;
+
+	/** Array of drm_i915_cmd_descriptor structs and count of structs */
+	__u32 cmd_count;
+	__u64 cmds;
+
+	/** Array of register offsets and count of registers */
+	__u64 regs;
+	__u32 reg_count;
+
+	__u32 pad;
+};
+
 #endif /* _UAPI_I915_DRM_H_ */

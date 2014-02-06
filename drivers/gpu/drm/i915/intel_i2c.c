@@ -34,6 +34,11 @@
 #include <drm/i915_drm.h>
 #include "i915_drv.h"
 
+enum disp_clk {
+	CDCLK,
+	CZCLK
+};
+
 struct gmbus_port {
 	const char *name;
 	int reg;
@@ -58,10 +63,60 @@ to_intel_gmbus(struct i2c_adapter *i2c)
 	return container_of(i2c, struct intel_gmbus, adapter);
 }
 
+static int get_disp_clk_div(struct drm_i915_private *dev_priv,
+			    enum disp_clk clk)
+{
+	u32 reg_val;
+	int clk_ratio;
+
+	reg_val = I915_READ(CZCLK_CDCLK_FREQ_RATIO);
+
+	if (clk == CDCLK)
+		clk_ratio =
+			((reg_val & CDCLK_FREQ_MASK) >> CDCLK_FREQ_SHIFT) + 1;
+	else
+		clk_ratio = (reg_val & CZCLK_FREQ_MASK) + 1;
+
+	return clk_ratio;
+}
+
+static void gmbus_set_freq(struct drm_i915_private *dev_priv)
+{
+	int vco, gmbus_freq = 0, cdclk_div;
+
+	BUG_ON(!IS_VALLEYVIEW(dev_priv->dev));
+
+	vco = valleyview_get_vco(dev_priv);
+
+	/* Get the CDCLK divide ratio */
+	cdclk_div = get_disp_clk_div(dev_priv, CDCLK);
+
+	/*
+	 * Program the gmbus_freq based on the cdclk frequency.
+	 * BSpec erroneously claims we should aim for 4MHz, but
+	 * in fact 1MHz is the correct frequency.
+	 */
+	if (cdclk_div)
+		gmbus_freq = (vco << 1) / cdclk_div;
+
+	if (WARN_ON(gmbus_freq == 0))
+		return;
+
+	I915_WRITE(GMBUSFREQ_VLV, gmbus_freq);
+}
+
 void
 intel_i2c_reset(struct drm_device *dev)
 {
 	struct drm_i915_private *dev_priv = dev->dev_private;
+
+	/*
+	 * In BIOS-less system, program the correct gmbus frequency
+	 * before reading edid.
+	 */
+	if (IS_VALLEYVIEW(dev))
+		gmbus_set_freq(dev_priv);
+
 	I915_WRITE(dev_priv->gpio_mmio_base + GMBUS0, 0);
 	I915_WRITE(dev_priv->gpio_mmio_base + GMBUS4, 0);
 }
@@ -570,12 +625,6 @@ int intel_setup_gmbus(struct drm_device *dev)
 		if (ret)
 			goto err;
 	}
-	if (IS_VALLEYVIEW(dev)) {
-		/*
-		 * TODO: Need to program proper GMBUS frequency using cdclk
-		 */
-		intel_set_gmbus_frequency(dev_priv);
-	}
 
 	intel_i2c_reset(dev_priv->dev);
 
@@ -587,63 +636,6 @@ err:
 		i2c_del_adapter(&bus->adapter);
 	}
 	return ret;
-}
-
-int sb_read32(struct drm_i915_private *dev_priv, u8 port_id,
-		u32 reg, u32 *val)
-{
-	unsigned long flags;
-	u32 cmd, devfn, opcode, port, be, bar;
-
-	bar = 0;
-	be = 0xf;
-	port = 0x4;
-	opcode = 6;
-	devfn = 0x00;
-
-	cmd = (devfn << 24) | (opcode << 16) |
-		(port << 8) | (be << 4) |
-		(bar << 1);
-
-	I915_WRITE(0x2108, reg);
-	I915_WRITE(0x2100, cmd);
-
-	*val = I915_READ(0x2104);
-	I915_WRITE(0x2104, 0);
-
-	return 0;
-}
-
-void intel_set_gmbus_frequency(struct drm_i915_private *dev_priv)
-{
-	u32 cck_fuse, cd_clk_index, cd_clk;
-	int gmbus_clock;
-	u16  m_cd_clk_vco_800_tbl[] = {0, 800, 533, 400, 320, 267, 0, 200, 178,
-				160, 0, 133, 0, 0, 107, 100, 0, 89, 0,
-				80, 0, 0, 0, 67, 0, 0, 0, 0, 0, 53, 0, 50};
-	u16  m_cd_clk_vco_1600_tbl[] = {0, 1600, 1067, 800, 640, 533, 0, 400,
-				356, 320, 0, 267, 0, 0, 213, 200, 0, 178, 0,
-				160, 0, 0, 0, 133, 0, 0, 0, 0, 0, 107, 0, 100};
-	u16  m_cd_clk_vco_2000_tbl[] = {0, 2000, 1333, 1000, 800, 667, 0, 500,
-				444, 400, 0, 333, 0, 0, 267, 250, 0,  222, 0,
-				200, 0, 0, 0, 167, 0, 0, 0, 0, 0, 133, 0, 125};
-
-	/* print cdclock speed */
-	sb_read32(dev_priv, 0x12, 0x08, &cck_fuse);
-	cck_fuse = cck_fuse & 0x03;
-
-	/* Get the CD Clock Index */
-	cd_clk_index = I915_READ(CD_CZ_CLOCK_FREQ_REG);
-	cd_clk_index = (cd_clk_index & 0x1F0) >> 4;
-	if (cck_fuse == 0)
-		cd_clk = m_cd_clk_vco_800_tbl[cd_clk_index];
-	else if (cck_fuse == 1)
-		cd_clk = m_cd_clk_vco_1600_tbl[cd_clk_index];
-	else if (cck_fuse == 2)
-		cd_clk = m_cd_clk_vco_2000_tbl[cd_clk_index];
-
-	gmbus_clock = cd_clk * 100 / 102;
-	I915_WRITE(GMBUSFREQ, gmbus_clock);
 }
 
 struct i2c_adapter *intel_gmbus_get_adapter(struct drm_i915_private *dev_priv,

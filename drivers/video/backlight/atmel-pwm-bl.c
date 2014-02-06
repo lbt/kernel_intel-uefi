@@ -118,7 +118,7 @@ static const struct backlight_ops atmel_pwm_bl_ops = {
 	.update_status  = atmel_pwm_bl_set_intensity,
 };
 
-static int atmel_pwm_bl_probe(struct platform_device *pdev)
+static int __init atmel_pwm_bl_probe(struct platform_device *pdev)
 {
 	struct backlight_properties props;
 	const struct atmel_pwm_bl_platform_data *pdata;
@@ -195,7 +195,6 @@ static int atmel_pwm_bl_probe(struct platform_device *pdev)
 	return 0;
 
 err_free_bl_dev:
-	platform_set_drvdata(pdev, NULL);
 	backlight_device_unregister(bldev);
 err_free_pwm:
 	pwm_channel_free(&pwmbl->pwmc);
@@ -203,7 +202,7 @@ err_free_mem:
 	return retval;
 }
 
-static int atmel_pwm_bl_remove(struct platform_device *pdev)
+static int __exit atmel_pwm_bl_remove(struct platform_device *pdev)
 {
 	struct atmel_pwm_bl *pwmbl = platform_get_drvdata(pdev);
 
@@ -212,7 +211,6 @@ static int atmel_pwm_bl_remove(struct platform_device *pdev)
 	pwm_channel_disable(&pwmbl->pwmc);
 	pwm_channel_free(&pwmbl->pwmc);
 	backlight_device_unregister(pwmbl->bldev);
-	platform_set_drvdata(pdev, NULL);
 
 	return 0;
 }
@@ -222,11 +220,10 @@ static struct platform_driver atmel_pwm_bl_driver = {
 		.name = "atmel-pwm-bl",
 	},
 	/* REVISIT add suspend() and resume() */
-	.probe = atmel_pwm_bl_probe,
-	.remove = atmel_pwm_bl_remove,
+	.remove = __exit_p(atmel_pwm_bl_remove),
 };
 
-module_platform_driver(atmel_pwm_bl_driver);
+module_platform_driver_probe(atmel_pwm_bl_driver, atmel_pwm_bl_probe);
 
 MODULE_AUTHOR("Hans-Christian egtvedt <hans-christian.egtvedt@atmel.com>");
 MODULE_DESCRIPTION("Atmel PWM backlight driver");
