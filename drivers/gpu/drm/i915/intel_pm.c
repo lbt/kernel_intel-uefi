@@ -1270,6 +1270,8 @@ static bool vlv_compute_drain_latency(struct drm_device *dev,
 		entries = (clock / 1000) * pixel_size;
 		*plane_prec_mult = (entries > 256) ?
 			DRAIN_LATENCY_PRECISION_64 : DRAIN_LATENCY_PRECISION_32;
+		if (WARN_ON(pixel_size == 0))
+			return latencyprogrammed;
 		*plane_dl = (64 * (*plane_prec_mult) * 4) / ((clock / 1000) *
 							pixel_size);
 		latencyprogrammed = true;
@@ -1287,6 +1289,8 @@ static bool vlv_compute_drain_latency(struct drm_device *dev,
 		entries = (clock / 1000) * sprite_pixel_size;
 		*sprite_prec_mult = (entries > 256) ?
 			DRAIN_LATENCY_PRECISION_64 : DRAIN_LATENCY_PRECISION_32;
+		if (WARN_ON(sprite_pixel_size == 0))
+			return latencyprogrammed;
 		*sprite_dl = (64 * (*sprite_prec_mult) * 4) / ((clock / 1000) *
 						sprite_pixel_size);
 		latencyprogrammed = true;
