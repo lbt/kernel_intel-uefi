@@ -1108,6 +1108,12 @@ static int i2c_hid_resume(struct device *dev)
 
 	enable_irq(client->irq);
 
+	if (hw_data->hw_reset) {
+		ret = hw_data->hw_reset(client);
+		if (ret)
+			return ret;
+	}
+
 	if (hw_data->hw_resume) {
 		ret = hw_data->hw_resume(client);
 		if (ret)
