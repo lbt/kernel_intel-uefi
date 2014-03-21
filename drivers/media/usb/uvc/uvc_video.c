@@ -1067,6 +1067,9 @@ static void uvc_video_decode_data(struct uvc_streaming *stream,
 	memcpy(mem, data, nbytes);
 	buf->bytesused += nbytes;
 
+	uvc_trace(UVC_TRACE_FRAME, "copy to %d len = %d\n", buf->bytesused,
+		  nbytes);
+
 	/* Complete the current frame if the buffer size was exceeded. */
 	if (len > maxlen) {
 		uvc_trace(UVC_TRACE_FRAME, "Frame complete (overflow).\n");
@@ -1186,7 +1189,9 @@ static void uvc_video_decode_bulk(struct urb *urb, struct uvc_streaming *stream,
 	struct uvc_buffer *buf)
 {
 	u8 *mem;
+	u8 *payload_start;
 	int len, ret;
+	bool end_of_payload;
 
 	/*
 	 * Ignore ZLPs if they're not part of a frame, otherwise process them
@@ -1196,6 +1201,7 @@ static void uvc_video_decode_bulk(struct urb *urb, struct uvc_streaming *stream,
 		return;
 
 	mem = urb->transfer_buffer;
+	payload_start = mem;
 	len = urb->actual_length;
 	stream->bulk.payload_size += len;
 
@@ -1227,18 +1233,43 @@ static void uvc_video_decode_bulk(struct urb *urb, struct uvc_streaming *stream,
 	 * sure buf is never dereferenced if NULL.
 	 */
 
-	/* Process video data. */
-	if (!stream->bulk.skip_payload && buf != NULL)
-		uvc_video_decode_data(stream, buf, mem, len);
-
 	/* Detect the payload end by a URB smaller than the maximum size (or
 	 * a payload size equal to the maximum) and process the header again.
 	 */
-	if (urb->actual_length < urb->transfer_buffer_length ||
-	    stream->bulk.payload_size >= stream->bulk.max_payload_size) {
+
+	if (urb->actual_length > 1) {
+		uvc_trace(UVC_TRACE_FRAME, "0x%x 0x%x len = %d\n",
+			  payload_start[0], payload_start[1],
+			  urb->actual_length);
+	} else {
+		uvc_trace(UVC_TRACE_FRAME, "Short URB\n");
+	}
+
+	if ((stream->dev->quirks & UVC_QUIRK_ALT_JPEG_PAYLOAD) &&
+	    (stream->cur_format->type == UVC_VS_FORMAT_MJPEG)) {
+		end_of_payload = (urb->actual_length == 14) &&
+			(payload_start[0] == 12);
+		uvc_trace(UVC_TRACE_FRAME, "Using alt JPEG quirk. EOP = %d\n",
+			  end_of_payload);
+		if (end_of_payload) {
+			mem += payload_start[0];
+			len -= payload_start[0];
+		}
+		} else {
+		end_of_payload =
+			urb->actual_length < urb->transfer_buffer_length ||
+			stream->bulk.payload_size >=
+			stream->bulk.max_payload_size;
+	}
+
+	if (!stream->bulk.skip_payload && buf != NULL)
+		uvc_video_decode_data(stream, buf, mem, len);
+
+	if (end_of_payload) {
 		if (!stream->bulk.skip_payload && buf != NULL) {
-			uvc_video_decode_end(stream, buf, stream->bulk.header,
-				stream->bulk.payload_size);
+			if (urb->actual_length > 1)
+				uvc_video_decode_end(stream, buf, payload_start,
+						     urb->actual_length);
 			if (buf->state == UVC_BUF_STATE_READY)
 				buf = uvc_queue_next_buffer(&stream->queue,
 							    buf);
